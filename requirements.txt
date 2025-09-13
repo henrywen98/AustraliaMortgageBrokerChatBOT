@@ -1,4 +1,6 @@
 streamlit
 python-dotenv
 requests
-# openai==1.54.5  # 已改为HTTP直连，不再强制需要，可选
+openai
+chromadb
+pymupdf

@@ -24,3 +24,7 @@ try:
     RAG_TOP_K = int(os.getenv("RAG_TOP_K", "3"))
 except ValueError:
     RAG_TOP_K = 3
+
+# Knowledge base settings
+CHROMA_DIR = os.getenv("CHROMA_DIR", "data/chroma")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")

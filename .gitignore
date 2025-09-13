@@ -22,3 +22,6 @@ venv/
 # Misc
 *.log
 
+# Data / vector store
+data/
+

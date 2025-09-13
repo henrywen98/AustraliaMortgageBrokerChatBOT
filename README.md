@@ -5,11 +5,11 @@
 已完成精简与模块化：
 - 移除多提供商 / 多模型 / 示例冗余代码，仅保留稳定的单模型问答；
 - 系统 Prompt 外置到 `prompts/`，便于维护与版本化；
+- 集成 Chroma+OpenAI Embeddings 的知识库检索（可选开启）；
 - 清理无用文件与编译产物，新增 `.gitignore`；
 - 修复“测试连接”按钮调用；
 - 保持 GPT-5-mini 调用逻辑不变（HTTP Chat Completions，无 temperature，使用 `max_completion_tokens`）。
- - 预留 RAG 插槽（默认关闭），可在 `.env` 配置；
- - UI 微调：头像、气泡间距、时间戳、撤销上一轮、导出对话。
+- UI 微调：头像、气泡间距、时间戳、撤销上一轮、导出对话。
 
 ## ✨ 功能概览
 - 多轮上下文：保留最近对话（自动截断防膨胀）
@@ -69,8 +69,10 @@ streamlit run app.py
 | 超时 & 重试 | 每次请求最长 60s，最多 3 次指数退避重试 |
 | temperature | 不使用（保持与当前接口兼容） |
 | max_tokens | 对 gpt-5-mini 实际映射为 `max_completion_tokens` |
-| RAG_ENABLED | 可选，默认 `false`（占位） |
+| RAG_ENABLED | 可选，默认 `false`（启用知识库检索） |
 | RAG_TOP_K | 可选，默认 `3` |
+| CHROMA_DIR | 可选，知识库存储目录，默认 `data/chroma` |
+| EMBEDDING_MODEL | 可选，默认 `text-embedding-3-small` |
 
 如果你看到 SSL / EOF / 502 等错误，客户端会自动重试；仍失败会在界面显示错误信息。
 
@@ -86,10 +88,16 @@ streamlit run app.py
 | 切换语言 | 侧边栏下拉框 |
 | 查看模型 | 侧边栏展示（只读） |
 
-## 🧪 健康检查
+## 🧪 健康检查与知识库构建
 当前 `api_client` 在初始化时会调用 `/v1/models` 列表探测所配置模型是否存在：
 - 若未列出：打印警告，但仍尝试直接调用（有些网关会代理映射）
 - 若多次请求失败：界面显示错误栈前缀（截断保护）
+
+如需使用知识库检索，可执行：
+```
+python ingest.py your_file.pdf
+```
+脚本会将 PDF 分页拆分、生成向量并写入本地 `Chroma` 数据库。索引建立后在 `.env` 中设置 `RAG_ENABLED=true` 即可启用检索。
 
 ## ☁️ 部署（Streamlit Cloud 示例）
 1. 推送代码到 GitHub

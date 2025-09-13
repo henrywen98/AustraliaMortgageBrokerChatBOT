@@ -1,4 +1,5 @@
 from utils.api_client import OpenAIClient
+from utils.knowledge_base import KnowledgeBase
 from pathlib import Path
 from typing import List, Dict, Any
 import textwrap
@@ -27,21 +28,22 @@ def _load_prompt(language: str) -> str:
 
 
 class SimpleRAG:
-    """可替换的 RAG 预留实现。
-    - 默认不进行检索；当启用时，可在 `retrieve` 中接入自定义检索逻辑。
-    - 仅定义接口与格式化方法，不引入额外依赖。
-    """
+    """ChromaDB-backed retrieval used as optional RAG component."""
 
     def __init__(self, enabled: bool = False, top_k: int = 3):
         self.enabled = enabled
         self.top_k = max(1, top_k)
+        self.kb: KnowledgeBase | None = None
+        if self.enabled:
+            try:
+                self.kb = KnowledgeBase()
+            except Exception:
+                self.kb = None
 
     def retrieve(self, query: str, k: int | None = None) -> List[Dict[str, Any]]:
-        """返回形如 [{"content": str, "source": str}] 的列表。
-        当前为占位实现，返回空列表。接入检索时替换这里即可。
-        """
-        _ = (query, k)
-        return []
+        if not self.enabled or not self.kb:
+            return []
+        return self.kb.search(query, top_k=k or self.top_k)
 
     def format_context(self, chunks: List[Dict[str, Any]]) -> str:
         if not chunks:
