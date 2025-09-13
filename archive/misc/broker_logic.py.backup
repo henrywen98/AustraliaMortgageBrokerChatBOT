@@ -1,0 +1,241 @@
+from utils.unified_client import UnifiedAIClient
+from utils.knowledge_base import KnowledgeBase
+from utils.web_search import WebS    def generate_response(self, user_input: str, language: str = "中文", mode: str = "simple", 
+                         use_web_search: bool = False, **kwargs) -> str:
+        """生成AI回复（支持网络搜索增强）
+        
+        Args:
+            user_input: 用户输入
+            language: 回答语言
+            mode: 回答模式
+            use_web_search: 是否启用网络搜索
+        """
+        
+        # 如果启用网络搜索且使用Deepseek
+        if use_web_search and self.api_client.provider == "deepseek":
+            try:
+                search_response = self.deepseek_web_search.search_and_answer(
+                    user_input, 
+                    search_enabled=True, 
+                    num_results=3
+                )
+                
+                # 格式化带来源的回答
+                answer = search_response["answer"]
+                
+                # 添加来源信息
+                if search_response.get("sources"):
+                    sources_text = "\n\n📚 信息来源："
+                    for i, source in enumerate(search_response["sources"], 1):
+                        sources_text += f"\n[{i}] {source['title']} - {source['source']}"
+                        sources_text += f"\n    🔗 {source['url']}"
+                    
+                    answer += sources_text
+                
+                return answer
+                
+            except Exception as e:
+                # 搜索失败时回退到普通模式
+                print(f"网络搜索失败，使用普通模式: {e}")
+                return self._generate_normal_response(user_input, language, mode, **kwargs)
+        
+        # 普通模式（不使用网络搜索）
+        return self._generate_normal_response(user_input, language, mode, **kwargs)
+    
+    def _generate_normal_response(self, user_input: str, language: str = "中文", mode: str = "simple", **kwargs) -> str:
+        """生成普通回复（原有逻辑）"""hClient, DeepseekWebSearch
+from pathlib import Path
+from typing import List, Dict, Any
+import textwrap
+import datetime as _dt
+from config import RAG_ENABLED, RAG_TOP_K, MODEL_NAME, MODEL_PROVIDER
+
+
+def _load_prompt(language: str) -> str:
+    """Load system prompt text from prompts/ directory by language.
+    Defaults to Chinese prompt if specific language file is missing.
+    """
+    base = Path(__file__).resolve().parents[1] / "prompts"
+    if language == "English":
+        path = base / "broker_system.en.md"
+    else:
+        path = base / "broker_system.zh.md"
+
+    if path.exists():
+        return path.read_text(encoding="utf-8").strip()
+
+    # Fallback minimal prompt (Chinese)
+    return (
+        "你是澳大利亚房贷中介AI助手，只能用中文回答。"
+        "请严格按以下结构输出：先‘推理过程（简要要点）’，后‘结论’。"
+    )
+
+
+class SimpleRAG:
+    """ChromaDB-backed retrieval used as optional RAG component with lazy loading."""
+
+    def __init__(self, enabled: bool = False, top_k: int = 3):
+        self.enabled = enabled
+        self.top_k = max(1, top_k)
+        self.kb: KnowledgeBase | None = None
+        self._kb_initialized = False
+        # 不在初始化时就创建数据库连接，而是在首次使用时创建
+
+    def _ensure_kb_initialized(self):
+        """懒加载：仅在首次使用时初始化知识库"""
+        if not self.enabled:
+            return
+        
+        if not self._kb_initialized:
+            try:
+                print("🔍 首次使用RAG，正在初始化知识库...")
+                self.kb = KnowledgeBase()
+                self._kb_initialized = True
+                print("✅ 知识库初始化完成")
+            except Exception as e:
+                print(f"⚠️ 知识库初始化失败: {e}")
+                self.kb = None
+                self._kb_initialized = True
+
+    def retrieve(self, query: str, k: int | None = None) -> List[Dict[str, Any]]:
+        if not self.enabled:
+            return []
+        
+        self._ensure_kb_initialized()
+        if not self.kb:
+            return []
+            
+        return self.kb.search(query, top_k=k or self.top_k)
+
+    def format_context(self, chunks: List[Dict[str, Any]]) -> str:
+        if not chunks:
+            return ""
+        lines = ["检索到的可能相关资料（仅供参考）："]
+        for i, ch in enumerate(chunks, 1):
+            src = ch.get("source") or "unknown"
+            content = (ch.get("content") or "").strip()
+            content = textwrap.shorten(content, width=600, placeholder=" …")
+            lines.append(f"[{i}] 来源: {src}\n{content}")
+        lines.append(
+            "请优先参考上述资料回答，引用时请用 [序号] 标注来源；在不确定时提示核验，不得编造未证实的利率或政策。"
+        )
+        return "\n\n".join(lines)
+
+    def format_sources(self, chunks: List[Dict[str, Any]]) -> str:
+        """Format retrieval results as numbered source list."""
+        if not chunks:
+            return ""
+        lines = []
+        for i, ch in enumerate(chunks, 1):
+            src = ch.get("source") or "unknown"
+            lines.append(f"[{i}] {src}")
+        return "\n".join(lines)
+
+
+class AustralianMortgageBroker:
+    """澳大利亚抵押贷款经纪人AI助手（支持多提供商 + 网络搜索）"""
+
+    def __init__(self):
+        self.api_client = UnifiedAIClient(model=MODEL_NAME, provider=MODEL_PROVIDER)
+        self.conversation_history = []
+        self.rag = SimpleRAG(enabled=RAG_ENABLED, top_k=RAG_TOP_K)
+        
+        # 初始化网络搜索功能
+        self.web_search_client = WebSearchClient()
+        self.deepseek_web_search = DeepseekWebSearch(self.api_client, self.web_search_client)
+    
+    def get_available_providers(self):
+        """获取可用的AI提供商"""
+        return ["openai", "deepseek"]
+
+    def set_provider(self, provider: str):
+        """切换AI提供商"""
+        try:
+            if provider.lower() == "deepseek":
+                self.api_client = UnifiedAIClient(model="deepseek-chat", provider="deepseek")
+            else:
+                self.api_client = UnifiedAIClient(model="gpt-4o-mini", provider="openai")
+            return True
+        except Exception:
+            return False
+
+    def get_provider_name(self, provider: str):
+        """获取提供商显示名称"""
+        names = {
+            "openai": "OpenAI",
+            "deepseek": "Deepseek"
+        }
+        return names.get(provider.lower(), "Unknown")
+
+    def test_provider_connection(self):
+        return self.api_client.test_connection()
+    
+    def generate_response(self, user_input: str, language: str = "中文", mode: str = "simple", **kwargs) -> str:
+        """生成AI回复（结构化：先“推理过程（简要要点）”，后“结论”）。
+        System Prompt 外置，默认中文；若传入 English 则加载英文提示词文件。
+        """
+
+        # 构建系统提示（从文件加载，便于维护）
+        system_prompt = _load_prompt(language)
+
+        # 可选：RAG 检索上下文（不影响原始逻辑，默认关闭）
+        rag_context = ""
+        rag_chunks: List[Dict[str, Any]] = []
+        if self.rag.enabled:
+            try:
+                rag_chunks = self.rag.retrieve(user_input, k=self.rag.top_k)
+                rag_context = self.rag.format_context(rag_chunks)
+            except Exception:
+                rag_context = ""
+                rag_chunks = []
+
+        # 构建消息列表
+        messages = [{"role": "system", "content": system_prompt}]
+        if rag_context:
+            messages.append({"role": "system", "content": rag_context})
+        
+        # 添加历史对话（最近5轮）
+        for msg in self.conversation_history[-10:]:
+            messages.append(msg)
+        
+        # 添加当前用户输入（附加时间戳在内部记录，避免污染提示）
+        messages.append({"role": "user", "content": user_input})
+        
+        try:
+            # 生成回复
+            response = self.api_client.generate_response(
+                messages=messages,
+                max_tokens=1500
+            )
+            
+            # 更新对话历史（带时间戳）
+            ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.conversation_history.append({"role": "user", "content": user_input, "ts": ts})
+            self.conversation_history.append({"role": "assistant", "content": response, "ts": ts})
+            
+            # 保持历史长度在合理范围内
+            if len(self.conversation_history) > 20:
+                self.conversation_history = self.conversation_history[-20:]
+            
+            # 保障中文与结构：若模型未按结构返回，做轻量兜底格式化
+            content = response.strip()
+            if "推理过程" not in content or "结论" not in content:
+                content = (
+                    "推理过程（简要要点）：\n"
+                    "- 根据提问内容进行政策与流程匹配\n"
+                    "- 结合贷款目的、身份、收入与负债等\n"
+                    "- 参考各贷方公开政策并提示差异\n"
+                    "- 如信息不足，建议补充关键细节\n"
+                    f"\n结论：\n{content}"
+                )
+            if rag_chunks:
+                sources_text = self.rag.format_sources(rag_chunks)
+                if sources_text:
+                    content = f"{content}\n\n参考来源：\n{sources_text}"
+            return content
+            
+        except Exception as e:
+            error_msg = f"生成回复时出现错误: {str(e)}"
+            if language == "English":
+                error_msg = f"Error generating response: {str(e)}"
+            return error_msg

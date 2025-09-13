@@ -2,5 +2,4 @@ streamlit
 python-dotenv
 requests
 openai
-chromadb
-pymupdf
+ddgs

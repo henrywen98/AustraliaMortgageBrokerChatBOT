@@ -1,30 +1,60 @@
-from utils.api_client import OpenAIClient
+from utils.unified_client import UnifiedAIClient
 from utils.knowledge_base import KnowledgeBase
+from utils.web_search import WebSearchClient, SearchAugmentor
 from pathlib import Path
 from typing import List, Dict, Any
 import textwrap
 import datetime as _dt
-from config import RAG_ENABLED, RAG_TOP_K
+from config import RAG_ENABLED, RAG_TOP_K, MODEL_NAME
 
 
-def _load_prompt(language: str) -> str:
-    """Load system prompt text from prompts/ directory by language.
-    Defaults to Chinese prompt if specific language file is missing.
+def _load_prompt(reasoning: bool = False) -> str:
+    """Load English system prompt, instruct output in Simplified Chinese.
+    If input is Chinese, model should internally translate to English for reasoning
+    (do not display translation) and then respond in Simplified Chinese.
     """
     base = Path(__file__).resolve().parents[1] / "prompts"
-    if language == "English":
-        path = base / "broker_system.en.md"
-    else:
-        path = base / "broker_system.zh.md"
+    path = base / "broker_system.en.md"
+
+    def _strip_structure(txt: str) -> str:
+        lines = txt.splitlines()
+        out = []
+        skip = 0
+        for i, ln in enumerate(lines):
+            if skip:
+                skip -= 1
+                continue
+            if "请严格按以下结构输出" in ln:
+                # 跳过提示与后续两行编号说明
+                skip = 3
+                continue
+            if ln.strip().lower().startswith("output strictly in two"):
+                skip = 3
+                continue
+            out.append(ln)
+        return "\n".join(out)
 
     if path.exists():
-        return path.read_text(encoding="utf-8").strip()
+        txt = path.read_text(encoding="utf-8").strip()
+        # Always append unified language/output rules
+        rules = [
+            "Always produce the final answer in Simplified Chinese.",
+            "If the user input is in Chinese, first internally translate it to English for reasoning; do not display the translation; only output the final answer in Simplified Chinese.",
+        ]
+        if not reasoning:
+            txt = _strip_structure(txt)
+        txt = f"{txt}\n\n" + "\n".join(rules)
+        return txt
 
     # Fallback minimal prompt (Chinese)
-    return (
-        "你是澳大利亚房贷中介AI助手，只能用中文回答。"
-        "请严格按以下结构输出：先‘推理过程（简要要点）’，后‘结论’。"
+    base = (
+        "You are an Australian mortgage broker AI assistant."
+        " Always output in Simplified Chinese."
+        " If the user input is in Chinese, first internally translate it to English for reasoning; do not display the translation."
     )
+    if reasoning:
+        base += " Output two sections: ‘推理过程（简要要点）’ and ‘结论’."
+    return base
 
 
 class SimpleRAG:
@@ -70,34 +100,36 @@ class SimpleRAG:
         return "\n".join(lines)
 
 
+def _detect_language(text: str) -> str:
+    """极简语言检测：含中文字符则判为中文，否则英文。"""
+    for ch in text:
+        if '\u4e00' <= ch <= '\u9fff':
+            return "中文"
+    return "English"
+
+
 class AustralianMortgageBroker:
-    """澳大利亚抵押贷款经纪人AI助手（系统提示外置，结构化输出）"""
+    """澳大利亚抵押贷款经纪人AI助手（OpenAI + 可选网络搜索）"""
 
     def __init__(self):
-        self.api_client = OpenAIClient()
+        self.api_client = UnifiedAIClient(model=MODEL_NAME)
         self.conversation_history = []
         self.rag = SimpleRAG(enabled=RAG_ENABLED, top_k=RAG_TOP_K)
-    
-    # 单模型实现，这些方法不再需要，保留兼容占位
-    def get_available_providers(self):
-        return ["openai"]
+        
+        # 初始化网络搜索功能
+        self.web_search_client = WebSearchClient()
+        self.search_augmentor = SearchAugmentor(self.api_client, self.web_search_client)
 
-    def set_provider(self, provider: str):
-        return True
-
-    def get_provider_name(self, provider: str):
-        return "OpenAI"
+    # 提供商固定为 OpenAI，此处无需名称映射
 
     def test_provider_connection(self):
         return self.api_client.test_connection()
-    
-    def generate_response(self, user_input: str, language: str = "中文", mode: str = "simple", **kwargs) -> str:
-        """生成AI回复（结构化：先“推理过程（简要要点）”，后“结论”）。
-        System Prompt 外置，默认中文；若传入 English 则加载英文提示词文件。
-        """
 
-        # 构建系统提示（从文件加载，便于维护）
-        system_prompt = _load_prompt(language)
+    def generate_response(self, user_input: str, reasoning: bool = False, **kwargs) -> str:
+        """生成AI回复。仅推理模式展示“推理过程”，普通模式仅“结论”。"""
+
+        # 构建系统提示（英文提示 + 简体中文输出规则）
+        system_prompt = _load_prompt(reasoning=reasoning)
 
         # 可选：RAG 检索上下文（不影响原始逻辑，默认关闭）
         rag_context = ""
@@ -138,17 +170,18 @@ class AustralianMortgageBroker:
             if len(self.conversation_history) > 20:
                 self.conversation_history = self.conversation_history[-20:]
             
-            # 保障中文与结构：若模型未按结构返回，做轻量兜底格式化
             content = response.strip()
-            if "推理过程" not in content or "结论" not in content:
-                content = (
-                    "推理过程（简要要点）：\n"
-                    "- 根据提问内容进行政策与流程匹配\n"
-                    "- 结合贷款目的、身份、收入与负债等\n"
-                    "- 参考各贷方公开政策并提示差异\n"
-                    "- 如信息不足，建议补充关键细节\n"
-                    f"\n结论：\n{content}"
-                )
+            # 仅在推理模式下兜底输出“推理过程”；普通模式不展示推理过程
+            if reasoning:
+                if "推理过程" not in content or "结论" not in content:
+                    content = (
+                        "推理过程（简要要点）：\n"
+                        "- 根据提问内容进行政策与流程匹配\n"
+                        "- 结合贷款目的、身份、收入与负债等\n"
+                        "- 参考各贷方公开政策并提示差异\n"
+                        "- 如信息不足，建议补充关键细节\n"
+                        f"\n结论：\n{content}"
+                    )
             if rag_chunks:
                 sources_text = self.rag.format_sources(rag_chunks)
                 if sources_text:
@@ -156,7 +189,45 @@ class AustralianMortgageBroker:
             return content
             
         except Exception as e:
-            error_msg = f"生成回复时出现错误: {str(e)}"
-            if language == "English":
-                error_msg = f"Error generating response: {str(e)}"
-            return error_msg
+            return f"生成回复时出现错误: {str(e)}"
+
+    def generate_response_with_search(self, user_input: str, search_enabled: bool = True, num_results: int = 3, reasoning: bool = False, **kwargs) -> str:
+        """生成回复（带网络搜索功能）"""
+        try:
+            # 使用网络搜索增强的回复生成
+            response_data = self.search_augmentor.search_and_answer(
+                user_query=user_input,
+                search_enabled=search_enabled,
+                num_results=num_results,
+                reasoning=reasoning,
+            )
+            
+            # 更新对话历史（带时间戳）
+            ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.conversation_history.append({"role": "user", "content": user_input, "ts": ts})
+            self.conversation_history.append({"role": "assistant", "content": response_data['answer'], "ts": ts})
+            
+            # 保持历史长度在合理范围内
+            if len(self.conversation_history) > 20:
+                self.conversation_history = self.conversation_history[-20:]
+            
+            # 格式化带来源的回复
+            content = response_data['answer'].strip()
+            
+            # 添加搜索来源
+            if response_data.get('sources'):
+                sources_text = "\n\n🌐 网络搜索来源：\n"
+                for i, source in enumerate(response_data['sources'], 1):
+                    sources_text += f"{i}. {source.get('title', '未知标题')}\n"
+                    sources_text += f"   📍 {source.get('url', '未知链接')}\n"
+                    # 从search_results中获取snippet，因为sources中可能没有snippet
+                    search_results = response_data.get('search_results', [])
+                    if i <= len(search_results) and search_results[i-1].get('snippet'):
+                        sources_text += f"   📝 {search_results[i-1]['snippet'][:100]}...\n"
+                    sources_text += "\n"
+                content = f"{content}\n{sources_text}"
+            
+            return content
+            
+        except Exception as e:
+            return f"生成回复时出现错误: {str(e)}"
