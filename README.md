@@ -11,6 +11,10 @@
 - 保持 GPT-5-mini 调用逻辑不变（HTTP Chat Completions，无 temperature，使用 `max_completion_tokens`）。
 - UI 微调：头像、气泡间距、时间戳、撤销上一轮、导出对话。
 
+## 📥 新增功能
+- 侧边栏上传 PDF 文件自动加入知识库
+- 生成回复时引用知识库内容并标注来源
+
 ## ✨ 功能概览
 - 多轮上下文：保留最近对话（自动截断防膨胀）
 - 双语支持：侧边栏切换中文 / English

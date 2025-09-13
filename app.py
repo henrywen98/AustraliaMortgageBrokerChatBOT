@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import json
 from datetime import datetime
+from tempfile import NamedTemporaryFile
 from dotenv import load_dotenv
 from utils.broker_logic import AustralianMortgageBroker
 from config import MODEL_NAME, RAG_ENABLED, RAG_TOP_K
@@ -53,6 +54,25 @@ def main():
         st.subheader("📚 检索增强（RAG）")
         st.caption("当前为预留插槽：默认关闭，可在 .env 配置")
         st.write(f"启用：{'是' if RAG_ENABLED else '否'}，Top-K：{RAG_TOP_K}")
+
+        # 文件上传
+        st.subheader("📄 上传知识库文件")
+        uploaded_file = st.file_uploader("上传 PDF 到知识库", type=["pdf"])
+        if uploaded_file is not None:
+            kb = getattr(st.session_state.broker.rag, "kb", None)
+            if kb:
+                with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(uploaded_file.read())
+                    tmp_path = tmp.name
+                try:
+                    added = kb.ingest_pdf(tmp_path, source=uploaded_file.name)
+                    st.success(f"已添加 {uploaded_file.name}（{added} 段）")
+                except Exception as e:
+                    st.error(f"处理文件失败: {e}")
+                finally:
+                    os.remove(tmp_path)
+            else:
+                st.error("知识库未启用，请在 .env 中设置 RAG_ENABLED=true")
 
         # 健康检查按钮
         if st.button("🔍 测试连接 / Test Connection"):

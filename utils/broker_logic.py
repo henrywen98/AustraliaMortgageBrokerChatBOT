@@ -55,9 +55,19 @@ class SimpleRAG:
             content = textwrap.shorten(content, width=600, placeholder=" …")
             lines.append(f"[{i}] 来源: {src}\n{content}")
         lines.append(
-            "请优先参考上述资料回答，并在不确定时提示核验；不得编造未证实的利率或政策。"
+            "请优先参考上述资料回答，引用时请用 [序号] 标注来源；在不确定时提示核验，不得编造未证实的利率或政策。"
         )
         return "\n\n".join(lines)
+
+    def format_sources(self, chunks: List[Dict[str, Any]]) -> str:
+        """Format retrieval results as numbered source list."""
+        if not chunks:
+            return ""
+        lines = []
+        for i, ch in enumerate(chunks, 1):
+            src = ch.get("source") or "unknown"
+            lines.append(f"[{i}] {src}")
+        return "\n".join(lines)
 
 
 class AustralianMortgageBroker:
@@ -91,12 +101,14 @@ class AustralianMortgageBroker:
 
         # 可选：RAG 检索上下文（不影响原始逻辑，默认关闭）
         rag_context = ""
+        rag_chunks: List[Dict[str, Any]] = []
         if self.rag.enabled:
             try:
-                chunks = self.rag.retrieve(user_input, k=self.rag.top_k)
-                rag_context = self.rag.format_context(chunks)
+                rag_chunks = self.rag.retrieve(user_input, k=self.rag.top_k)
+                rag_context = self.rag.format_context(rag_chunks)
             except Exception:
                 rag_context = ""
+                rag_chunks = []
 
         # 构建消息列表
         messages = [{"role": "system", "content": system_prompt}]
@@ -137,6 +149,10 @@ class AustralianMortgageBroker:
                     "- 如信息不足，建议补充关键细节\n"
                     f"\n结论：\n{content}"
                 )
+            if rag_chunks:
+                sources_text = self.rag.format_sources(rag_chunks)
+                if sources_text:
+                    content = f"{content}\n\n参考来源：\n{sources_text}"
             return content
             
         except Exception as e:
