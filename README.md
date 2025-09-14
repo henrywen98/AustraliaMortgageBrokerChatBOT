@@ -3,7 +3,7 @@
 面向澳洲房贷咨询的智能 Streamlit 助手。提供网络搜索增强与专业经纪人人设。内部统一使用英文系统提示，但最终输出为简体中文；若输入为中文，将在内部先译为英文再进行推理（不展示翻译）。
 
 [![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## 🎯 核心特性
@@ -18,7 +18,7 @@
 - **来源引用**: 自动显示信息来源和链接
 - **DuckDuckGo驱动**: 默认使用免费的DuckDuckGo搜索（无需API密钥）
 - **智能降级**: Serper API可选，DuckDuckGo保底，Mock数据兜底
-- **一键开关**: 输入框下方随时启用/关闭
+- **一键开关**: 侧边栏中随时启用/关闭
 
 ### 🎨 用户体验
 - **现代化界面**: 响应式 Streamlit 设计
@@ -87,7 +87,9 @@
    ```
    
 5. **访问应用**
-   浏览器打开：http://localhost:8501
+浏览器打开：http://localhost:8501
+
+更多部署细节与常见问题，请参见 `DEPLOYMENT.md`。
 
 ## 📋 环境配置
 
@@ -114,14 +116,12 @@ MODEL_NAME = "gpt-4o-mini"
 ### 界面功能
 
 **侧边栏控制**：
+- 🌐 **网络搜索**: 启用后获取最新房贷信息（附来源）
+- 🧠 **推理模式**: 开启时显示“推理过程”和“结论”；默认仅“结论”
 - 🔍 **测试连接**: 验证 API 密钥有效性
 - 🗑️ **对话管理**: 清除历史/撤销上一轮
 - 📥 **数据导出**: 下载 JSON 格式对话记录
-
-**主界面控制**：
-- 🌐 **网络搜索（输入框附近）**: 启用后获取最新房贷信息（附来源）
-- 🧠 **推理模式（输入框附近）**: 仅在开启时显示“推理过程”，默认仅“结论”
-- 💬 **智能对话**: 专业的澳洲房贷咨询回答
+- 💬 **智能对话**: 主界面聊天输入框用于发起提问
 
 ### 常见使用场景
 
@@ -139,7 +139,6 @@ MODEL_NAME = "gpt-4o-mini"
    - 所需文件清单
    - 审批时间预估
 
-## 🏗️ 项目结构
 ## 🏗️ 项目结构
 
 ```
@@ -174,7 +173,7 @@ MODEL_NAME = "gpt-4o-mini"
 - **AI**: OpenAI GPT-4o-mini
 - **搜索**: DuckDuckGo (默认免费) / Google Serper API (可选)
 - **部署**: Streamlit Cloud / GitHub Pages
-- **语言**: Python 3.8+
+- **语言**: Python 3.11+
 
 ## 🌐 网络搜索说明
 
@@ -245,7 +244,7 @@ A:
 A:
 1. **默认使用DuckDuckGo**: 无需任何配置，自动启用免费搜索
 2. **网络连接问题**: 检查网络是否正常，防火墙设置
-3. **依赖包问题**: 确保`duckduckgo-search`已正确安装
+3. **依赖包问题**: 确保`ddgs`已正确安装（已在 requirements.txt 中）
 4. **备用方案**: 即使网络搜索失败，也会显示内置的Mock数据
 5. **升级选项**: 可配置`SERPER_API_KEY`获得更高质量的Google搜索结果
 

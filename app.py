@@ -146,6 +146,19 @@ def main():
         current_model = getattr(st.session_state.broker.api_client, 'model', MODEL_NAME)
         st.info(f"当前模型：{current_model}")
 
+        # 对话选项（统一放置在侧边栏）
+        st.subheader("对话选项")
+        st.session_state.use_web_search = st.toggle(
+            "🌐 启用网络搜索",
+            value=st.session_state.use_web_search,
+            help="默认关闭。开启后将搜索最新信息并附带引用链接。",
+        )
+        st.session_state.reasoning_mode = st.toggle(
+            "🧠 推理模式",
+            value=st.session_state.reasoning_mode,
+            help="开启后，回答将包含‘推理过程’与‘结论’两部分。",
+        )
+
         # （RAG UI 已移除；功能接口保留以便未来启用）
 
         # 健康检查按钮
@@ -214,21 +227,7 @@ def main():
             if ts:
                 st.markdown(f"<div class='chat-ts'>{ts}</div>", unsafe_allow_html=True)
     
-    # 对话框下方设置
-    st.markdown("---")
-    cols = st.columns([1, 1, 2])
-    with cols[0]:
-        st.session_state.use_web_search = st.toggle(
-            "🌐 启用网络搜索",
-            value=st.session_state.use_web_search,
-            help="默认关闭。开启后将搜索最新信息并附带引用链接。",
-        )
-    with cols[1]:
-        st.session_state.reasoning_mode = st.toggle(
-            "🧠 推理模式",
-            value=st.session_state.reasoning_mode,
-            help="开启后，回答将包含‘推理过程’与‘结论’两部分。",
-        )
+    # 对话框下方设置（已迁移至侧边栏，这里移除）
 
     # 用户输入
     if prompt := st.chat_input("请输入您的房贷相关问题（支持中文/English）…"):
