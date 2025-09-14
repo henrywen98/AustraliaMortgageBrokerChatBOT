@@ -21,7 +21,8 @@ class WebSearchClient:
                 self.default_engine = "serper"
             else:
                 try:
-                    from duckduckgo_search import DDGS  # noqa: F401
+                    # Prefer the lightweight 'ddgs' package
+                    from ddgs import DDGS  # noqa: F401
                     self.default_engine = "duckduckgo"
                 except Exception:
                     self.default_engine = "mock"
@@ -98,7 +99,8 @@ class WebSearchClient:
             from ddgs import DDGS
             
             # 针对澳洲房贷优化搜索查询
-            au_query = f"{query} Australia mortgage loan rate bank"
+            # 基于英文关键词优化：若原查询为中文，请在调用处先翻译
+            au_query = f"{query} Australia mortgage loan rate bank RBA cash rate"
             
             results = []
             # 简化API调用
@@ -187,7 +189,7 @@ class SearchAugmentor:
         self.llm_client = llm_client
         self.web_search = web_search_client
 
-    def search_and_answer(self, user_query: str, search_enabled: bool = True, num_results: int = 3, reasoning: bool = False) -> Dict[str, Any]:
+    def search_and_answer(self, user_query: str, search_enabled: bool = True, num_results: int = 3, reasoning: bool = False, search_query: str | None = None) -> Dict[str, Any]:
         """使用网络搜索增强回答，支持可选推理模式。统一要求输出简体中文。"""
         response_data = {
             "answer": "",
@@ -198,8 +200,9 @@ class SearchAugmentor:
         
         if search_enabled:
             # 执行网络搜索
-            print(f"🔍 正在搜索: {user_query}")
-            search_results = self.web_search.search(user_query, num_results)
+            effective_query = (search_query or user_query or "").strip()
+            print(f"🔍 正在搜索: {effective_query}")
+            search_results = self.web_search.search(effective_query, num_results)
             response_data["search_results"] = search_results
             
             if search_results:

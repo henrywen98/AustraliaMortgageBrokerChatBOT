@@ -131,6 +131,9 @@ class AustralianMortgageBroker:
         # 构建系统提示（英文提示 + 简体中文输出规则）
         system_prompt = _load_prompt(reasoning=reasoning)
 
+        # 统一英文推理输入：若为中文，先翻译为英文，再送模型；输出仍为简体中文
+        clean_input = self._translate_for_reasoning_if_needed(user_input)
+
         # 可选：RAG 检索上下文（不影响原始逻辑，默认关闭）
         rag_context = ""
         rag_chunks: List[Dict[str, Any]] = []
@@ -151,8 +154,8 @@ class AustralianMortgageBroker:
         for msg in self.conversation_history[-10:]:
             messages.append(msg)
         
-        # 添加当前用户输入（附加时间戳在内部记录，避免污染提示）
-        messages.append({"role": "user", "content": user_input})
+        # 添加当前用户输入（英文推理文本；附加时间戳在内部记录，避免污染提示）
+        messages.append({"role": "user", "content": clean_input})
         
         try:
             # 生成回复
@@ -194,9 +197,12 @@ class AustralianMortgageBroker:
     def generate_response_with_search(self, user_input: str, search_enabled: bool = True, num_results: int = 3, reasoning: bool = False, **kwargs) -> str:
         """生成回复（带网络搜索功能）"""
         try:
+            # 为搜索与推理统一英文输入（提高搜索质量，尤其是中文提问）
+            english_query = self._translate_for_reasoning_if_needed(user_input)
             # 使用网络搜索增强的回复生成
             response_data = self.search_augmentor.search_and_answer(
                 user_query=user_input,
+                search_query=english_query,  # 使用英文搜索查询
                 search_enabled=search_enabled,
                 num_results=num_results,
                 reasoning=reasoning,
@@ -231,3 +237,29 @@ class AustralianMortgageBroker:
             
         except Exception as e:
             return f"生成回复时出现错误: {str(e)}"
+
+    # ----------------------------
+    # 内部工具：翻译与清理
+    # ----------------------------
+    def _translate_for_reasoning_if_needed(self, text: str) -> str:
+        """若输入含中文字符，则调用轻量翻译生成英文查询/推理文本；否则原样返回。
+        使用相同OpenAI客户端，限制较小的max_tokens以减少时延。
+        """
+        if _detect_language(text) == "中文":
+            try:
+                messages = [
+                    {"role": "system", "content": "You are a precise translator. Translate the user's query to clear English suitable for web search and reasoning. Output English only, no explanations."},
+                    {"role": "user", "content": text},
+                ]
+                translated = self.api_client.generate_response(messages=messages, max_tokens=80)
+                return self._strip_latency_suffix(translated).strip()
+            except Exception:
+                # 兜底：原文返回（仍可由模型内部翻译）
+                return text
+        return text
+
+    @staticmethod
+    def _strip_latency_suffix(text: str) -> str:
+        """移除UnifiedAIClient附加的(延迟 xxms | OpenAI model)后缀"""
+        lines = [ln for ln in text.splitlines() if not ln.strip().startswith("(延迟 ")]
+        return "\n".join(lines).strip()
