@@ -5,13 +5,12 @@
 - `utils/` — core logic:
   - `unified_client.py` (OpenAI client; GPT-5 mini via Responses API + Web Search tool)
   - `broker_logic.py` (assistant orchestration; model-native web search)
-  - `knowledge_base.py` (KB hooks)
 - `prompts/` — system prompts for the assistant.
 - `data/` — local KB/artifacts (safe to ignore in CI).
 - `test_*.py` (root) — lightweight tests/health checks.
 - `.streamlit/` — Streamlit config; `secrets.toml.example` for cloud.
 - `.env` / `.env.example` — local configuration.
-- `archive/` — experiments and older prototypes.
+- `prompts/` — model/system prompts.
 
 ## Build, Test, and Development Commands
 - Create env and install: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
@@ -29,7 +28,7 @@
 ## Testing Guidelines
 - Prefer `pytest`; place tests as `test_*.py` at repo root (consistent with current files).
 - Keep tests deterministic and fast; gate network/API tests on `OPENAI_API_KEY` presence.
-- For search features, prefer the model-native Web Search tool (no extra deps) when using GPT-5 mini.
+- For search features, prefer the model-native Web Search tool (no extra deps) with GPT-5 mini.
 
 ## Commit & Pull Request Guidelines
 - Use Conventional Commits (seen in history): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`; imperative, concise subject.
@@ -37,7 +36,7 @@
 - PRs should include: summary, screenshots for UI changes, test plan/steps, and notes on config/secrets changes.
 
 ## Security & Configuration Tips
-- Required env: `OPENAI_API_KEY`. Optional: `MODEL_NAME`, `RAG_ENABLED`.
+- Required env: `OPENAI_API_KEY`. Optional: `MODEL_NAME`.
 - Local: use `.env`; Cloud: use `.streamlit/secrets.toml`. Never commit secrets.
 - If you add config, update `.env.example` and docs.
 

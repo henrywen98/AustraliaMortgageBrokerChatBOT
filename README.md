@@ -96,7 +96,6 @@
 
 ### 可选配置
 - `MODEL_NAME`: 模型名称（推荐: `gpt-5-mini`；兼容 `gpt-4o-mini`）
-- `RAG_ENABLED`: 启用知识库功能（默认: `false`）
 
 ### Streamlit Cloud Secrets 示例
 ```toml
@@ -158,8 +157,7 @@ MODEL_NAME = "gpt-5-mini"  # 推荐：内置Web Search
 │   ├── unified_client.py      # 🤖 OpenAI API 客户端（GPT-5 mini 使用 Responses API + Web Search 工具）
 │   └── broker_logic.py        # 🧠 对话逻辑控制器（模型内置搜索）
 │
-└── archive/
-    └── rag/                   # 📚 RAG 功能归档（可选）
+└── prompts/
 ```
 
 ## 🔧 技术栈
@@ -229,8 +227,8 @@ A: 在 Streamlit Cloud Secrets 中修改 `MODEL_NAME`，支持：
 **Q: 支持其他语言吗？**
 A: 当前支持中文和英文，可在 `prompts/` 目录添加其他语言的系统提示词。
 
-**Q: 如何添加知识库功能？**
-A: RAG 功能已归档到 `archive/rag/`，如需启用请参考归档文档。
+**Q: 是否支持外部知识库（RAG）？**
+A: 正式版未内置 RAG；如需检索功能，建议直接依赖模型内置 Web Search 或在后续版本中单独扩展。
 
 ## 🤝 贡献指南
 
