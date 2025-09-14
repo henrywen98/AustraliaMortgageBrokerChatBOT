@@ -5,6 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from utils.broker_logic import AustralianMortgageBroker
 from config import MODEL_NAME, validate_environment, is_streamlit_cloud
+import re
 
 # 加载环境变量
 load_dotenv()
@@ -72,6 +73,131 @@ def initialize_session_state():
         st.session_state.reasoning_mode = False
     if "last_error" not in st.session_state:
         st.session_state.last_error = None
+    if "ui_lang" not in st.session_state:
+        st.session_state.ui_lang = "zh"  # zh or en
+
+
+def _t(key: str) -> str:
+    """Simple i18n for UI labels."""
+    zh = {
+        "settings": "⚙️ 设置",
+        "current_model": "当前模型",
+        "conversation_options": "对话选项",
+        "toggle_search": "🌐 启用网络搜索",
+        "toggle_search_help": "默认关闭。开启后将搜索最新信息并附带引用链接。",
+        "toggle_reasoning": "🧠 推理模式",
+        "toggle_reasoning_help": "开启后，回答将包含‘推理过程’与‘结论’两部分。",
+        "test_conn": "🔍 测试连接 / Test Connection",
+        "clear_history": "🗑️ 清除对话历史",
+        "undo": "↩️ 撤销上一轮",
+        "export": "📥 导出对话",
+        "download_json": "下载 JSON",
+        "about_title": "关于本应用 / About",
+        "about_lines": "澳大利亚房贷专业AI助手\n- 🏦 专业房贷知识\n- 💬 多轮对话\n- 🌏 双语输出 (ZH / EN)\n- 🤖 AI驱动分析",
+        "mode_search_on": "模式：模型 + 网络搜索",
+        "mode_search_off": "模式：仅模型",
+        "reasoning_on": "推理模式：已开启",
+        "reasoning_off": "推理模式：关闭",
+        "ui_lang": "界面语言 / UI Language",
+        "lang_zh": "中文",
+        "lang_en": "English",
+        "help": "🆘 使用帮助 / Help",
+        "help_text": "- 侧边栏可开启网络搜索与推理模式\n- 搜索开启时将引用权威来源（RBA/政府/银行）\n- 公式自动渲染，避免出现原始 LaTeX 代码\n- 如需英文界面，请切换 UI Language",
+        "chat_placeholder": "请输入您的房贷相关问题（支持中文/English）…",
+        "search_sources": "🌐 网络搜索来源：",
+        "unknown_title": "未知标题",
+        "unknown_link": "未知链接",
+    }
+    en = {
+        "settings": "⚙️ Settings",
+        "current_model": "Current model",
+        "conversation_options": "Conversation Options",
+        "toggle_search": "🌐 Enable Web Search",
+        "toggle_search_help": "Off by default. When on, fetch recent info with citations.",
+        "toggle_reasoning": "🧠 Reasoning Mode",
+        "toggle_reasoning_help": "When on, show 'Reasoning' and 'Conclusion'.",
+        "test_conn": "🔍 Test Connection",
+        "clear_history": "🗑️ Clear History",
+        "undo": "↩️ Undo Last",
+        "export": "📥 Export Chat",
+        "download_json": "Download JSON",
+        "about_title": "About",
+        "about_lines": "Australian Mortgage Broker AI\n- 🏦 Mortgage expertise\n- 💬 Multi-turn chat\n- 🌏 Bilingual UI (ZH / EN)\n- 🤖 AI-powered analysis",
+        "mode_search_on": "Mode: Model + Web Search",
+        "mode_search_off": "Mode: Model only",
+        "reasoning_on": "Reasoning: ON",
+        "reasoning_off": "Reasoning: OFF",
+        "ui_lang": "UI Language",
+        "lang_zh": "中文",
+        "lang_en": "English",
+        "help": "🆘 Help",
+        "help_text": "- Use sidebar to toggle search and reasoning\n- With search on, cites authoritative AU sources (RBA/gov/banks)\n- Formulas are auto-rendered (no raw LaTeX)\n- Switch UI Language for English labels",
+        "chat_placeholder": "Ask your mortgage question (中文/English)…",
+        "search_sources": "🌐 Sources:",
+        "unknown_title": "Untitled",
+        "unknown_link": "Unknown link",
+    }
+    lang = st.session_state.get("ui_lang", "zh")
+    return (en if lang == "en" else zh).get(key, key)
+
+
+def render_rich_text(text: str):
+    """Render Markdown with basic LaTeX support: ```latex``` blocks and $$...$$ blocks.
+    Falls back to markdown for other content.
+    """
+    if not text:
+        return
+
+    content = str(text)
+
+    # Handle fenced latex blocks: ```latex ... ```
+    parts = []
+    idx = 0
+    fence_pat = re.compile(r"```latex\n(.*?)\n```", re.DOTALL | re.IGNORECASE)
+    for m in fence_pat.finditer(content):
+        if m.start() > idx:
+            parts.append(("md", content[idx:m.start()]))
+        parts.append(("latex", m.group(1).strip()))
+        idx = m.end()
+    if idx < len(content):
+        parts.append(("md", content[idx:]))
+
+    # Now split md parts further by $$...$$ blocks
+    final_parts = []
+    for kind, chunk in parts:
+        if kind == "latex":
+            final_parts.append(("latex", chunk))
+            continue
+        # split by $$...$$
+        s = chunk
+        pos = 0
+        while True:
+            start = s.find("$$", pos)
+            if start == -1:
+                final_parts.append(("md", s[pos:]))
+                break
+            end = s.find("$$", start + 2)
+            if end == -1:
+                # unmatched, treat as md
+                final_parts.append(("md", s[pos:]))
+                break
+            if start > pos:
+                final_parts.append(("md", s[pos:start]))
+            expr = s[start + 2 : end].strip()
+            final_parts.append(("latex", expr))
+            pos = end + 2
+
+    # Render
+    for kind, chunk in final_parts:
+        if not chunk:
+            continue
+        if kind == "latex":
+            try:
+                st.latex(chunk)
+            except Exception:
+                st.markdown(f"``{chunk}``")
+        else:
+            st.markdown(chunk)
 
 
 def main():
@@ -140,67 +266,78 @@ def main():
     
     # 侧边栏配置
     with st.sidebar:
-        st.title("⚙️ 设置")
+        st.title(_t("settings"))
+
+        # UI language selector
+        st.selectbox(
+            _t("ui_lang"),
+            options=["zh", "en"],
+            format_func=lambda v: _t("lang_zh") if v == "zh" else _t("lang_en"),
+            key="ui_lang",
+        )
 
         # 显示当前模型信息（只读）
         current_model = getattr(st.session_state.broker.api_client, 'model', MODEL_NAME)
-        st.info(f"当前模型：{current_model}")
+        st.info(f"{_t('current_model')}：{current_model}")
 
         # 对话选项（统一放置在侧边栏）
-        st.subheader("对话选项")
+        st.subheader(_t("conversation_options"))
         st.session_state.use_web_search = st.toggle(
-            "🌐 启用网络搜索",
+            _t("toggle_search"),
             value=st.session_state.use_web_search,
-            help="默认关闭。开启后将搜索最新信息并附带引用链接。",
+            help=_t("toggle_search_help"),
         )
         st.session_state.reasoning_mode = st.toggle(
-            "🧠 推理模式",
+            _t("toggle_reasoning"),
             value=st.session_state.reasoning_mode,
-            help="开启后，回答将包含‘推理过程’与‘结论’两部分。",
+            help=_t("toggle_reasoning_help"),
         )
+
+        # Status indicators
+        if st.session_state.use_web_search:
+            st.success(_t("mode_search_on"))
+        else:
+            st.info(_t("mode_search_off"))
+        st.caption(_t("reasoning_on") if st.session_state.reasoning_mode else _t("reasoning_off"))
 
         # （RAG UI 已移除；功能接口保留以便未来启用）
 
         # 健康检查按钮
-        if st.button("🔍 测试连接 / Test Connection"):
+        if st.button(_t("test_conn")):
             ok = st.session_state.broker.test_provider_connection()
             if ok:
-                st.success("模型调用成功✔️")
+                st.success("模型调用成功✔️" if st.session_state.ui_lang=="zh" else "API connection OK ✔️")
             else:
-                st.error("连接或调用失败，请检查网络 / API Key")
+                st.error("连接或调用失败，请检查网络 / API Key" if st.session_state.ui_lang=="zh" else "Connection or call failed. Check network/API key.")
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🗑️ 清除对话历史"):
+            if st.button(_t("clear_history")):
                 st.session_state.messages = []
                 st.rerun()
         with col2:
-            if st.button("↩️ 撤销上一轮"):
+            if st.button(_t("undo")):
                 if len(st.session_state.messages) >= 2:
                     st.session_state.messages = st.session_state.messages[:-2]
                     st.rerun()
 
         # 导出对话
         if st.session_state.messages:
-            st.subheader("📥 导出对话")
+            st.subheader(_t("export"))
             export_json = json.dumps(st.session_state.messages, ensure_ascii=False, indent=2)
             st.download_button(
-                label="下载 JSON",
+                label=_t("download_json"),
                 data=export_json.encode("utf-8"),
                 file_name=f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json"
             )
 
         st.markdown("---")
-        st.markdown("""
-        **关于本应用 / About**
+        st.markdown(f"**{_t('about_title')}**")
+        st.markdown(_t("about_lines"))
 
-        澳大利亚房贷专业AI助手
-        - 🏦 专业房贷知识
-        - 💬 多轮对话
-        - 🌏 双语输出 (ZH / EN)
-        - 🤖 AI驱动分析
-        """)
+        with st.expander(_t("help")):
+            st.markdown(_t("help_text"))
     
     # 轻量样式优化：更紧凑的聊天区域
     st.markdown(
@@ -223,14 +360,17 @@ def main():
         ts = message.get("ts")
         avatar = "👤" if role == "user" else "🏦"
         with st.chat_message(role, avatar=avatar):
-            st.markdown(message["content"])
+            if role == "assistant":
+                render_rich_text(message["content"])
+            else:
+                st.markdown(message["content"])
             if ts:
                 st.markdown(f"<div class='chat-ts'>{ts}</div>", unsafe_allow_html=True)
     
     # 对话框下方设置（已迁移至侧边栏，这里移除）
 
     # 用户输入
-    if prompt := st.chat_input("请输入您的房贷相关问题（支持中文/English）…"):
+    if prompt := st.chat_input(_t("chat_placeholder")):
         # 添加用户消息
         now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.session_state.messages.append({"role": "user", "content": prompt, "ts": now_ts})
@@ -241,7 +381,10 @@ def main():
         # 生成AI回复
         with st.chat_message("assistant", avatar="🏦"):
             search_indicator = "🌐 " if st.session_state.get("use_web_search", False) else ""
-            with st.spinner(f"{search_indicator}正在思考 / Thinking ..."):
+            thinking_text = (
+                f"{search_indicator}正在思考 ..." if st.session_state.ui_lang=="zh" else f"{search_indicator}Thinking ..."
+            )
+            with st.spinner(thinking_text):
                 try:
                     # 根据是否启用网络搜索选择不同的回复方法
                     if st.session_state.get("use_web_search", False):
@@ -257,11 +400,13 @@ def main():
                             reasoning=st.session_state.reasoning_mode,
                         )
                     now_ts2 = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    st.markdown(response)
+                    render_rich_text(response)
                     st.markdown(f"<div class='chat-ts'>{now_ts2}</div>", unsafe_allow_html=True)
                     st.session_state.messages.append({"role": "assistant", "content": response, "ts": now_ts2})
                 except Exception as e:
-                    error_msg = f"抱歉，生成回复时出现错误 / Error: {str(e)}"
+                    error_msg = (
+                        f"抱歉，生成回复时出现错误 / Error: {str(e)}" if st.session_state.ui_lang=="zh" else f"Error generating reply: {str(e)}"
+                    )
                     st.session_state.last_error = str(e)
                     st.error(error_msg)
                     st.session_state.messages.append({"role": "assistant", "content": error_msg, "ts": datetime.now().strftime('%Y-%m-%d %H:%M:%S')})

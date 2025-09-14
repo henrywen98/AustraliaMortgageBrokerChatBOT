@@ -39,7 +39,12 @@ def _load_prompt(reasoning: bool = False) -> str:
         # Always append unified language/output rules
         rules = [
             "Always produce the final answer in Simplified Chinese.",
-            "If the user input is in Chinese, first internally translate it to English for reasoning; do not display the translation; only output the final answer in Simplified Chinese.",
+            "If the user input is in Chinese, first internally translate it to English for reasoning and web search; do not display the translation; only output the final answer in Simplified Chinese.",
+            "When presenting numbers: include units (e.g., AUD $), use thousands separators, and keep precision consistent.",
+            "For mortgage calculations, define terms clearly: deposit (首付), loan amount (贷款额), interest rate (利率), term (年限).",
+            "If deposit is given as a percentage, loan amount = property price − (property price × deposit rate). If deposit is given as an amount, loan amount = property price − deposit. If applicable, deduct eligible government grants from loan amount and explain assumptions.",
+            "Validate consistency: if you compute monthly repayment, cross-check with the standard amortization formula and ensure text and numbers match.",
+            "Prefer clear text formulas and concise steps; if using math notation, keep it simple (e.g., $$...$$) and avoid raw LaTeX code blocks.",
         ]
         if not reasoning:
             txt = _strip_structure(txt)
