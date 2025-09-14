@@ -99,18 +99,34 @@ class UnifiedAIClient:
                 }
                 # 最大输出（responses API 字段名不同）
                 payload["max_output_tokens"] = max_tokens
+                # 限制推理开销，提升产出速度
+                payload["reasoning"] = {"effort": "low"}
                 if use_web_search:
                     payload["tools"] = [{"type": "web_search"}]
                 resp = self._request_with_retry(payload, url=self.responses_api_url)
                 data = resp.json()
-                # Responses API：尝试提取 output_text 或 content 文本
-                content = (
-                    data.get("output_text")
-                    or ("\n".join([c.get("text", "") for c in data.get("output", []) if isinstance(c, dict)]) or None)
-                )
+                # Responses API：优先从 message 输出中收集文本
+                content = None
+                if isinstance(data.get("output"), list):
+                    texts: list[str] = []
+                    for item in data["output"]:
+                        if not isinstance(item, dict):
+                            continue
+                        if item.get("type") == "message" and item.get("role") in (None, "assistant"):
+                            for seg in item.get("content", []) or []:
+                                if isinstance(seg, dict):
+                                    t = seg.get("text") or ""
+                                    if t:
+                                        texts.append(t)
+                        elif item.get("type") in ("output_text",):
+                            t = item.get("text") or ""
+                            if t:
+                                texts.append(t)
+                    if texts:
+                        content = "\n".join(texts).strip()
                 if not content:
-                    # 兼容某些返回形态
-                    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+                    # 次优：尝试聚合 output_text 或兼容 Chat Completions 字段
+                    content = data.get("output_text") or data.get("choices", [{}])[0].get("message", {}).get("content")
                 if not content:
                     raise Exception(f"Empty response: {data}")
                 latency = getattr(resp, "latency_ms", 0)

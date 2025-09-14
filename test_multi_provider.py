@@ -19,13 +19,15 @@ def test_openai_client():
         if not api_key or api_key == "your_openai_api_key_here":
             print("⚠️ OPENAI_API_KEY 未配置，跳过测试")
             return
-        client = UnifiedAIClient(model=os.getenv("MODEL_NAME", "gpt-4o-mini"))
+        client = UnifiedAIClient(model=os.getenv("MODEL_NAME", "gpt-5-mini"))
         print("✅ 客户端创建成功")
         print(f"   模型: {client.model}")
-        print(f"   API URL: {client.api_url}")
-        print("🔍 测试API连接...")
-        test_messages = [{"role": "user", "content": "请用中文简单自我介绍"}]
-        response = client.generate_response(test_messages, max_tokens=50)
+        print("🔍 Responses API + Web Search 测试...")
+        test_messages = [
+            {"role": "system", "content": "Answer in Simplified Chinese."},
+            {"role": "user", "content": "当前澳大利亚的官方现金利率是多少？请给出参考来源。"},
+        ]
+        response = client.generate_response(test_messages, max_tokens=800, use_web_search=True)
         print("✅ API调用成功")
         print(f"📤 回答预览: {response[:100]}...")
     except Exception as e:
@@ -41,6 +43,7 @@ def test_broker_basic():
         response = broker.generate_response(
             "固定利率房贷有什么特点？",
             reasoning=False,
+            use_web_search=False,
         )
         print(f"📤 回答: {response[:200]}...")
     except Exception as e:

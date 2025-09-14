@@ -17,15 +17,14 @@ OPENAI_API_KEY_VAR = "OPENAI_API_KEY"
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 # 默认模型配置
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5-mini")
 MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "openai")
 
 # =============================================================================
 # 可选功能配置
 # =============================================================================
 
-# 网络搜索配置
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")  # Google Serper API密钥（可选）
+# 外部网络搜索配置已移除：gpt-5-mini 使用模型内置 Web Search 工具
 
 # RAG功能配置（归档状态，保留接口）
 def _as_bool(val: str | None, default: bool = False) -> bool:
