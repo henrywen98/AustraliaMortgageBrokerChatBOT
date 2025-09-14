@@ -94,18 +94,18 @@ class WebSearchClient:
         return results
     
     def _search_duckduckgo(self, query: str, num_results: int) -> List[Dict[str, Any]]:
-        """使用DuckDuckGo搜索（免费且无需API密钥）"""
+        """使用DuckDuckGo搜索（免费且无需API密钥）。
+        期望上游已进行英文翻译与查询重写，这里不再追加噪声关键词。
+        """
         try:
             from ddgs import DDGS
             
-            # 针对澳洲房贷优化搜索查询
-            # 基于英文关键词优化：若原查询为中文，请在调用处先翻译
-            au_query = f"{query} Australia mortgage loan rate bank RBA cash rate"
+            q = (query or "").strip()
             
             results = []
             # 简化API调用
             search_results = DDGS().text(
-                au_query,
+                q,
                 region="au-en",  # 澳洲英语区域
                 safesearch="moderate",
                 max_results=num_results
@@ -279,22 +279,18 @@ class SearchAugmentor:
         if " australia" not in low and " au" not in low and "rba" not in low:
             boosters.append("Australia")
 
-        # Cash rate → RBA and regulators
+        # Cash rate → RBA primary
         if any(kw in low for kw in ["cash rate", "rba", "official cash rate"]):
-            boosters.append("RBA cash rate")
-            boosters.append("site:rba.gov.au OR site:apra.gov.au OR site:abs.gov.au OR site:treasury.gov.au")
+            boosters.append("RBA official cash rate")
+            boosters.append("site:rba.gov.au")
 
-        # Home loan / mortgage interest
+        # Home loan / mortgage interest (prefer comparative sources)
         if any(kw in low for kw in ["home loan", "mortgage", "interest rate", "variable rate", "fixed rate"]):
-            boosters.append(
-                "site:commbank.com.au OR site:nab.com.au OR site:anz.com OR site:westpac.com.au OR site:canstar.com.au"
-            )
+            boosters.append("site:canstar.com.au")
 
         # First home buyer / FHOG
         if any(kw in low for kw in ["first home", "fhog", "first home owner grant", "stamp duty"]):
-            boosters.append(
-                "site:firsthome.gov.au OR site:nsw.gov.au OR site:vic.gov.au OR site:qld.gov.au OR site:wa.gov.au"
-            )
+            boosters.append("site:firsthome.gov.au")
 
         # De-duplicate tokens while preserving order
         if boosters:

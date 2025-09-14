@@ -244,11 +244,18 @@ class AustralianMortgageBroker:
     def _translate_for_reasoning_if_needed(self, text: str) -> str:
         """若输入含中文字符，则调用轻量翻译生成英文查询/推理文本；否则原样返回。
         使用相同OpenAI客户端，限制较小的max_tokens以减少时延。
+        包含金融领域术语映射以提高准确性（如：现金利率→official cash rate）。
         """
         if _detect_language(text) == "中文":
             try:
                 messages = [
-                    {"role": "system", "content": "You are a precise translator. Translate the user's query to clear English suitable for web search and reasoning. Output English only, no explanations."},
+                    {"role": "system", "content": (
+                        "You are a precise translator for Australian finance. "
+                        "Translate the user's query to concise English suitable for web search and reasoning. "
+                        "Use established terms: 现金利率 -> official cash rate (RBA); 房贷 -> home loan or mortgage; "
+                        "浮动利率 -> variable rate; 固定利率 -> fixed rate; 首次购房者/首置 -> first home buyer / FHOG. "
+                        "Output English only, no notes or explanations."
+                    )},
                     {"role": "user", "content": text},
                 ]
                 translated = self.api_client.generate_response(messages=messages, max_tokens=80)
