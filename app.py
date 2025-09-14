@@ -386,19 +386,12 @@ def main():
             )
             with st.spinner(thinking_text):
                 try:
-                    # 根据是否启用网络搜索选择不同的回复方法
-                    if st.session_state.get("use_web_search", False):
-                        response = st.session_state.broker.generate_response_with_search(
-                            prompt,
-                            search_enabled=True,
-                            num_results=3,
-                            reasoning=st.session_state.reasoning_mode,
-                        )
-                    else:
-                        response = st.session_state.broker.generate_response(
-                            prompt,
-                            reasoning=st.session_state.reasoning_mode,
-                        )
+                    # 统一由模型侧处理（Responses API 工具启用/禁用）
+                    response = st.session_state.broker.generate_response(
+                        prompt,
+                        reasoning=st.session_state.reasoning_mode,
+                        use_web_search=st.session_state.get("use_web_search", False),
+                    )
                     now_ts2 = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     render_rich_text(response)
                     st.markdown(f"<div class='chat-ts'>{now_ts2}</div>", unsafe_allow_html=True)

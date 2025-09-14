@@ -1,5 +1,4 @@
 streamlit
-ddgs>=1.9.7
 python-dotenv
 requests
 openai

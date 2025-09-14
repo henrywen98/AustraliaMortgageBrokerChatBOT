@@ -25,11 +25,14 @@ class UnifiedAIClient:
 
         self.api_key = os.getenv(OPENAI_API_KEY_VAR)
         self.api_url = OPENAI_CHAT_URL
+        self.responses_api_url = "https://api.openai.com/v1/responses"
         if not self.api_key:
             print("⚠️ OPENAI_API_KEY 未设置")
 
         # 预探测模型是否存在（忽略失败）
         self.model_available = self._probe_model(self.model)
+        # 模型能力探测（启用 Responses API & 工具）
+        self.use_responses = str(self.model).lower().startswith("gpt-5")
 
     def _headers(self) -> Dict[str, str]:
         if not self.api_key:
@@ -51,13 +54,13 @@ class UnifiedAIClient:
             return False
         return False
 
-    def _request_with_retry(self, payload: Dict[str, Any]) -> requests.Response:
+    def _request_with_retry(self, payload: Dict[str, Any], *, url: Optional[str] = None) -> requests.Response:
         last_error: Optional[str] = None
         for attempt in range(1, self.max_retries + 1):
             try:
                 start = time.time()
                 resp = self.session.post(
-                    self.api_url,
+                    url or self.api_url,
                     headers=self._headers(),
                     data=json.dumps(payload),
                     timeout=self.timeout,
@@ -81,29 +84,54 @@ class UnifiedAIClient:
                 continue
         raise Exception(last_error or "Unknown network error")
 
-    def generate_response(self, messages: List[dict], max_tokens: int = 1500) -> str:
+    def generate_response(self, messages: List[dict], max_tokens: int = 1500, use_web_search: bool = False) -> str:
         if not self.model_available:
             print(
                 f"⚠️ 模型 {self.model} 未在 /v1/models 列表中发现，仍尝试直接调用；请确认名称是否正确。"
             )
 
-        payload: Dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-        }
-        if self.model.startswith("gpt-4") or self.model.startswith("gpt-5"):
-            payload["max_completion_tokens"] = max_tokens
-        else:
-            payload["max_tokens"] = max_tokens
-
         try:
-            resp = self._request_with_retry(payload)
-            data = resp.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content")
-            if not content:
-                raise Exception(f"Empty response: {data}")
-            latency = getattr(resp, "latency_ms", 0)
-            return content.strip() + f"\n\n(延迟 {latency:.0f}ms | OpenAI {self.model})"
+            if self.use_responses:
+                # Responses API 路径，支持工具（web_search）
+                payload: Dict[str, Any] = {
+                    "model": self.model,
+                    "input": messages,
+                }
+                # 最大输出（responses API 字段名不同）
+                payload["max_output_tokens"] = max_tokens
+                if use_web_search:
+                    payload["tools"] = [{"type": "web_search"}]
+                resp = self._request_with_retry(payload, url=self.responses_api_url)
+                data = resp.json()
+                # Responses API：尝试提取 output_text 或 content 文本
+                content = (
+                    data.get("output_text")
+                    or ("\n".join([c.get("text", "") for c in data.get("output", []) if isinstance(c, dict)]) or None)
+                )
+                if not content:
+                    # 兼容某些返回形态
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+                if not content:
+                    raise Exception(f"Empty response: {data}")
+                latency = getattr(resp, "latency_ms", 0)
+                return content.strip() + f"\n\n(延迟 {latency:.0f}ms | OpenAI {self.model})"
+            else:
+                # 兼容 Chat Completions 路径
+                payload: Dict[str, Any] = {
+                    "model": self.model,
+                    "messages": messages,
+                }
+                if self.model.startswith("gpt-4") or self.model.startswith("gpt-5"):
+                    payload["max_completion_tokens"] = max_tokens
+                else:
+                    payload["max_tokens"] = max_tokens
+                resp = self._request_with_retry(payload)
+                data = resp.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content")
+                if not content:
+                    raise Exception(f"Empty response: {data}")
+                latency = getattr(resp, "latency_ms", 0)
+                return content.strip() + f"\n\n(延迟 {latency:.0f}ms | OpenAI {self.model})"
         except Exception as e:
             raise Exception(f"API call failed: {str(e)}")
 

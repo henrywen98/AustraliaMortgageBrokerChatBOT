@@ -1,6 +1,5 @@
 from utils.unified_client import UnifiedAIClient
 from utils.knowledge_base import KnowledgeBase
-from utils.web_search import WebSearchClient, SearchAugmentor
 from pathlib import Path
 from typing import List, Dict, Any
 import textwrap
@@ -120,24 +119,18 @@ class AustralianMortgageBroker:
         self.api_client = UnifiedAIClient(model=MODEL_NAME)
         self.conversation_history = []
         self.rag = SimpleRAG(enabled=RAG_ENABLED, top_k=RAG_TOP_K)
-        
-        # 初始化网络搜索功能
-        self.web_search_client = WebSearchClient()
-        self.search_augmentor = SearchAugmentor(self.api_client, self.web_search_client)
+        # 内置网络搜索将由模型侧（Responses API tools）处理；无需本地搜索客户端
 
     # 提供商固定为 OpenAI，此处无需名称映射
 
     def test_provider_connection(self):
         return self.api_client.test_connection()
 
-    def generate_response(self, user_input: str, reasoning: bool = False, **kwargs) -> str:
+    def generate_response(self, user_input: str, reasoning: bool = False, use_web_search: bool = False, **kwargs) -> str:
         """生成AI回复。仅推理模式展示“推理过程”，普通模式仅“结论”。"""
 
         # 构建系统提示（英文提示 + 简体中文输出规则）
         system_prompt = _load_prompt(reasoning=reasoning)
-
-        # 统一英文推理输入：若为中文，先翻译为英文，再送模型；输出仍为简体中文
-        clean_input = self._translate_for_reasoning_if_needed(user_input)
 
         # 可选：RAG 检索上下文（不影响原始逻辑，默认关闭）
         rag_context = ""
@@ -159,14 +152,15 @@ class AustralianMortgageBroker:
         for msg in self.conversation_history[-10:]:
             messages.append(msg)
         
-        # 添加当前用户输入（英文推理文本；附加时间戳在内部记录，避免污染提示）
-        messages.append({"role": "user", "content": clean_input})
+        # 添加当前用户输入（直接传递给模型；模型侧处理翻译/搜索）
+        messages.append({"role": "user", "content": user_input})
         
         try:
             # 生成回复
             response = self.api_client.generate_response(
                 messages=messages,
-                max_tokens=1500
+                max_tokens=1500,
+                use_web_search=use_web_search,
             )
             
             # 更新对话历史（带时间戳）
@@ -190,96 +184,10 @@ class AustralianMortgageBroker:
                         "- 如信息不足，建议补充关键细节\n"
                         f"\n结论：\n{content}"
                     )
-            if rag_chunks:
-                sources_text = self.rag.format_sources(rag_chunks)
-                if sources_text:
-                    content = f"{content}\n\n参考来源：\n{sources_text}"
+            # 参考来源由模型在开启搜索时自行在正文中引用（例如“参考资料/References”）
             return content
             
         except Exception as e:
             return f"生成回复时出现错误: {str(e)}"
 
-    def generate_response_with_search(self, user_input: str, search_enabled: bool = True, num_results: int = 3, reasoning: bool = False, **kwargs) -> str:
-        """生成回复（带网络搜索功能）"""
-        try:
-            # 为搜索与推理统一英文输入（提高搜索质量，尤其是中文提问）
-            english_query = self._translate_for_reasoning_if_needed(user_input)
-            # 使用网络搜索增强的回复生成
-            response_data = self.search_augmentor.search_and_answer(
-                user_query=user_input,
-                search_query=english_query,  # 使用英文搜索查询
-                search_enabled=search_enabled,
-                num_results=num_results,
-                reasoning=reasoning,
-            )
-            
-            # 更新对话历史（带时间戳）
-            ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.conversation_history.append({"role": "user", "content": user_input, "ts": ts})
-            self.conversation_history.append({"role": "assistant", "content": response_data['answer'], "ts": ts})
-            
-            # 保持历史长度在合理范围内
-            if len(self.conversation_history) > 20:
-                self.conversation_history = self.conversation_history[-20:]
-            
-            # 格式化带来源的回复
-            content = response_data['answer'].strip()
-            
-            # 添加搜索来源
-            if response_data.get('sources'):
-                sources_text = "\n\n🌐 网络搜索来源：\n"
-                for i, source in enumerate(response_data['sources'], 1):
-                    sources_text += f"{i}. {source.get('title', '未知标题')}\n"
-                    sources_text += f"   📍 {source.get('url', '未知链接')}\n"
-                    # 从search_results中获取snippet，因为sources中可能没有snippet
-                    search_results = response_data.get('search_results', [])
-                    if i <= len(search_results) and search_results[i-1].get('snippet'):
-                        sources_text += f"   📝 {search_results[i-1]['snippet'][:100]}...\n"
-                    sources_text += "\n"
-                content = f"{content}\n{sources_text}"
-            
-            return content
-            
-        except Exception as e:
-            return f"生成回复时出现错误: {str(e)}"
-
-    # ----------------------------
-    # 内部工具：翻译与清理
-    # ----------------------------
-    def _translate_for_reasoning_if_needed(self, text: str) -> str:
-        """若输入含中文字符，则调用轻量翻译生成英文查询/推理文本；否则原样返回。
-        使用相同OpenAI客户端，限制较小的max_tokens以减少时延。
-        包含澳洲房贷经纪（mortgage broking）术语映射以提高准确性。
-        """
-        if _detect_language(text) == "中文":
-            try:
-                messages = [
-                    {"role": "system", "content": (
-                        "You are a precise translator for Australian mortgage broking. "
-                        "Translate the user's query into concise English suitable for web search and LLM reasoning. "
-                        "Keep terminology specific to Australia. Use these mappings when applicable: "
-                        "现金利率→official cash rate (RBA); 房贷→mortgage/home loan; 浮动利率→variable rate; 固定利率→fixed rate; "
-                        "自住→owner-occupier; 投资房→investor; 首付→deposit; LVR/贷款价值比→loan-to-value ratio (LVR); "
-                        "DTI/负债收入比→debt-to-income ratio (DTI); 缓冲/压力测试→serviceability buffer; 服务能力/还款能力→serviceability; "
-                        "只付息→interest-only; 本息同还→principal and interest; 转贷/再融资→refinance; 过桥贷款→bridging loan; 建房贷款→construction loan; "
-                        "额度预批→pre-approval; 条件性预批→conditional pre-approval; 无条件批核→unconditional approval; 对比利率→comparison rate; "
-                        "返现→cashback; 抵消账户→offset account; 提前还款违约金(固定)→fixed break costs; 重新提取→redraw facility; "
-                        "印花税→stamp duty; 初次置业补助/首置补助→First Home Owner Grant (FHOG); 首置担保→First Home Guarantee (HGS); "
-                        "单亲家庭担保→Family Home Guarantee; 学生贷款→HECS-HELP; 自雇→self-employed; 工资收入→PAYG; 真实存款→genuine savings; "
-                        "估值→valuation; 交割→settlement; 律师/代书→conveyancer/solicitor; 附带融资条件→subject to finance; 冷静期→cooling-off period. "
-                        "Output English only, no explanations."
-                    )},
-                    {"role": "user", "content": text},
-                ]
-                translated = self.api_client.generate_response(messages=messages, max_tokens=80)
-                return self._strip_latency_suffix(translated).strip()
-            except Exception:
-                # 兜底：原文返回（仍可由模型内部翻译）
-                return text
-        return text
-
-    @staticmethod
-    def _strip_latency_suffix(text: str) -> str:
-        """移除UnifiedAIClient附加的(延迟 xxms | OpenAI model)后缀"""
-        lines = [ln for ln in text.splitlines() if not ln.strip().startswith("(延迟 ")]
-        return "\n".join(lines).strip()
+    # 内置搜索由模型处理；此处不再提供翻译或外部搜索辅助

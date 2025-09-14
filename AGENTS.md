@@ -3,9 +3,8 @@
 ## Project Structure & Module Organization
 - `app.py` — Streamlit entrypoint and UI.
 - `utils/` — core logic:
-  - `unified_client.py` (OpenAI client, retries/probing)
-  - `broker_logic.py` (assistant orchestration, optional RAG/search)
-  - `web_search.py` (Serper/DuckDuckGo/mock)
+  - `unified_client.py` (OpenAI client; GPT-5 mini via Responses API + Web Search tool)
+  - `broker_logic.py` (assistant orchestration; model-native web search)
   - `knowledge_base.py` (KB hooks)
 - `prompts/` — system prompts for the assistant.
 - `data/` — local KB/artifacts (safe to ignore in CI).
@@ -16,7 +15,6 @@
 
 ## Build, Test, and Development Commands
 - Create env and install: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
-- Optional web search: `pip install ddgs` (enables DuckDuckGo path).
 - Run locally: `streamlit run app.py`
 - Health check: `python check_deployment.py`
 - Tests: `pytest -q` (if installed) or `python test_multi_provider.py` and `python test_startup_performance.py`.
@@ -31,7 +29,7 @@
 ## Testing Guidelines
 - Prefer `pytest`; place tests as `test_*.py` at repo root (consistent with current files).
 - Keep tests deterministic and fast; gate network/API tests on `OPENAI_API_KEY` presence.
-- For search features, prefer mock mode or provide `SERPER_API_KEY`/`ddgs` locally.
+- For search features, prefer the model-native Web Search tool (no extra deps) when using GPT-5 mini.
 
 ## Commit & Pull Request Guidelines
 - Use Conventional Commits (seen in history): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`; imperative, concise subject.
@@ -39,7 +37,7 @@
 - PRs should include: summary, screenshots for UI changes, test plan/steps, and notes on config/secrets changes.
 
 ## Security & Configuration Tips
-- Required env: `OPENAI_API_KEY`. Optional: `SERPER_API_KEY`, `MODEL_NAME`, `RAG_ENABLED`.
+- Required env: `OPENAI_API_KEY`. Optional: `MODEL_NAME`, `RAG_ENABLED`.
 - Local: use `.env`; Cloud: use `.streamlit/secrets.toml`. Never commit secrets.
 - If you add config, update `.env.example` and docs.
 
