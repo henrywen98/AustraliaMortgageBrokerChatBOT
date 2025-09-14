@@ -81,13 +81,13 @@
 
 4. **启动应用**
    ```bash
-   streamlit run app.py
+   `streamlit run app.py`
    ```
    
 5. **访问应用**
 浏览器打开：http://localhost:8501
 
-更多部署细节与常见问题，请参见 `DEPLOYMENT.md`。
+更多部署细节与常见问题，请见下文的“常见问题”章节。
 
 ## 📋 环境配置
 
@@ -104,8 +104,7 @@
 OPENAI_API_KEY = "sk-..."
 
 # 可选
-MODEL_NAME = "gpt-4o-mini"
-# SERPER_API_KEY = "your-serper-key"  # 可选：高质量Google搜索
+MODEL_NAME = "gpt-5-mini"  # 推荐：内置Web Search
 ```
 
 ## 💡 使用指南
