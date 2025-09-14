@@ -1,6 +1,6 @@
 # 澳大利亚房贷AI助手 | Australian Mortgage Broker AI Assistant
 
-面向澳洲房贷咨询的智能 Streamlit 助手。提供网络搜索增强与专业经纪人人设。内部统一使用英文系统提示，但最终输出为简体中文；若输入为中文，将在内部先译为英文再进行搜索与推理（不展示翻译）。
+面向澳洲房贷咨询的智能 Streamlit 助手。基于 OpenAI GPT-5 mini（内置 Web Search 工具），提供权威来源引用与专业经纪人人设。系统提示使用英文，最终输出统一为简体中文。
 
 [![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -9,18 +9,15 @@
 ## 🎯 核心特性
 
 ### 🤖 智能对话
-- **OpenAI驱动**: 基于 gpt-4o-mini 的专业房贷咨询
+- **OpenAI驱动**: 推荐使用 gpt-5-mini（内置 Web Search）
 - **上下文记忆**: 多轮对话连贯性
 - **专业角色**: 澳洲房贷经纪人人设
-- **英文优先推理**: 中文提问自动精准翻译为英文进行推理与搜索，答案统一中文输出（提升一致性）
+- **统一中文输出**: 无论输入语言如何，回答统一简体中文
 
-### 🌐 网络搜索增强
-- **实时信息**: 搜索最新的利率、政策、市场动态
-- **来源引用**: 自动显示信息来源和链接
-- **DuckDuckGo驱动**: 默认使用免费的DuckDuckGo搜索（无需API密钥）
-- **智能降级**: Serper API可选，DuckDuckGo保底，Mock数据兜底
+### 🌐 内置网络搜索
+- **实时信息**: 直接使用 GPT-5 mini 的 Web Search 工具
+- **来源引用**: 在回答末尾附“参考来源/References”（模型会带链接）
 - **一键开关**: 侧边栏中随时启用/关闭
-- **智能重写**: 针对热门主题自动加权权威站点（如现金利率→优先 `site:rba.gov.au`；首置/FHOG→`firsthome.gov.au`；利率对比→`canstar.com.au`）
 
 ### 🎨 用户体验
 - **现代化界面**: 响应式 Streamlit 设计
@@ -55,8 +52,7 @@
    OPENAI_API_KEY = "your_actual_openai_api_key_here"
    
    # 可选配置
-   MODEL_NAME = "gpt-4o-mini"
-   # SERPER_API_KEY = "your_serper_api_key_here"  # 网络搜索增强
+   MODEL_NAME = "gpt-5-mini"  # 推荐：内置Web Search
    ```
 
 5. **保存并部署**
@@ -99,11 +95,8 @@
 - `OPENAI_API_KEY`: OpenAI API 密钥（[获取地址](https://platform.openai.com/api-keys)）
 
 ### 可选配置
-- `MODEL_NAME`: 模型名称（默认: `gpt-4o-mini`）
-- `SERPER_API_KEY`: Google 搜索 API（可选，未设置时自动使用免费的DuckDuckGo）
+- `MODEL_NAME`: 模型名称（推荐: `gpt-5-mini`；兼容 `gpt-4o-mini`）
 - `RAG_ENABLED`: 启用知识库功能（默认: `false`）
-  
-依赖说明：`requirements.txt` 已包含 `ddgs`（DuckDuckGo轻量库）。
 
 ### Streamlit Cloud Secrets 示例
 ```toml
@@ -163,9 +156,8 @@ MODEL_NAME = "gpt-4o-mini"
 │   └── broker_system.en.md    # 🇺🇸 英文系统提示词（统一使用；输出为简体中文）
 │
 ├── utils/
-│   ├── unified_client.py      # 🤖 OpenAI API 客户端
-│   ├── broker_logic.py        # 🧠 对话逻辑控制器
-│   └── web_search.py          # 🔍 网络搜索功能
+│   ├── unified_client.py      # 🤖 OpenAI API 客户端（GPT-5 mini 使用 Responses API + Web Search 工具）
+│   └── broker_logic.py        # 🧠 对话逻辑控制器（模型内置搜索）
 │
 └── archive/
     └── rag/                   # 📚 RAG 功能归档（可选）
@@ -174,37 +166,14 @@ MODEL_NAME = "gpt-4o-mini"
 ## 🔧 技术栈
 
 - **前端**: Streamlit (Python Web 框架)
-- **AI**: OpenAI GPT-4o-mini
-- **搜索**: DuckDuckGo (默认免费) / Google Serper API (可选)
+- **AI**: OpenAI GPT-5 mini（内置 Web Search）
+- **搜索**: 由模型内置 Web Search 工具完成
 - **部署**: Streamlit Cloud / GitHub Pages
 - **语言**: Python 3.11+
 
 ## 🌐 网络搜索说明
 
-### 为什么需要网络搜索？
-OpenAI API本身**不提供实时网络搜索功能**：
-- 📅 **知识截止**: GPT模型训练数据有时间限制，无法获取最新信息
-- 🏦 **实时性需求**: 房贷利率、政策变化需要最新数据
-- 🔍 **信息验证**: 提供来源链接，增强答案可信度
-
-### 🆓 默认方案：DuckDuckGo（推荐）
-- ✅ **完全免费**: 无需任何API密钥
-- ✅ **隐私友好**: 不追踪用户搜索
-- ✅ **澳洲优化**: 自动使用澳洲地区搜索
-- ✅ **开箱即用**: 安装依赖即可使用
-- ⚡ **智能查询**: 自动添加澳洲房贷相关关键词
-
-### 💰 升级选项：Google Serper（可选）
-- ✅ **更高质量**: 基于Google搜索结果
-- ✅ **更快速度**: API响应更稳定
-- 💰 **按量付费**: 1000次搜索约$5 USD
-- 🔧 **简单配置**: 只需添加`SERPER_API_KEY`
-
-### 🔄 智能降级机制
-系统会按以下优先级自动选择：
-1. **Google Serper** (如果配置了`SERPER_API_KEY`)
-2. **DuckDuckGo** (始终可用，无需配置)
-3. **Mock数据** (网络不可用时的备用方案)
+使用 GPT-5 mini 时，应用通过 Responses API 调用模型的 Web Search 工具完成在线检索与引用，无需额外搜索依赖或 API Key。关闭搜索开关时，仅使用模型自身知识回答。
 
 ## ⚡ 性能优化
 
@@ -246,12 +215,9 @@ A:
 
 **Q: 网络搜索不工作？**
 A:
-1. **默认使用DuckDuckGo**: 无需任何配置，自动启用免费搜索
-2. **网络连接问题**: 检查网络是否正常，防火墙设置
-3. **依赖包问题**: 确保 `ddgs` 已正确安装（已在 requirements.txt 中）
-6. **结果偏题？**: 已启用查询重写对权威站点加权；若需更强约束，可在问题中补充 `site:rba.gov.au` 等站点限制。
-4. **备用方案**: 即使网络搜索失败，也会显示内置的Mock数据
-5. **升级选项**: 可配置`SERPER_API_KEY`获得更高质量的Google搜索结果
+1. 确认 `MODEL_NAME` 为 `gpt-5-mini` 或支持 Web Search 的同类模型
+2. 检查 OpenAI API Key 权限与用量配额
+3. 网络连通性与防火墙设置
 
 ### 功能相关
 
@@ -292,7 +258,6 @@ A: RAG 功能已归档到 `archive/rag/`，如需启用请参考归档文档。
 
 - [OpenAI API 文档](https://platform.openai.com/docs)
 - [Streamlit 文档](https://docs.streamlit.io/)
-- [Serper API 文档](https://serper.dev/api-documentation)
 - [部署到 Streamlit Cloud](https://share.streamlit.io/)
 
 ## 📞 支持
