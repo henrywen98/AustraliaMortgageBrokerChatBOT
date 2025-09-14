@@ -1,10 +1,8 @@
 from utils.unified_client import UnifiedAIClient
-from utils.knowledge_base import KnowledgeBase
 from pathlib import Path
 from typing import List, Dict, Any
-import textwrap
 import datetime as _dt
-from config import RAG_ENABLED, RAG_TOP_K, MODEL_NAME
+from config import MODEL_NAME
 
 
 def _load_prompt(reasoning: bool = False) -> str:
@@ -61,49 +59,6 @@ def _load_prompt(reasoning: bool = False) -> str:
     return base
 
 
-class SimpleRAG:
-    """ChromaDB-backed retrieval used as optional RAG component."""
-
-    def __init__(self, enabled: bool = False, top_k: int = 3):
-        self.enabled = enabled
-        self.top_k = max(1, top_k)
-        self.kb: KnowledgeBase | None = None
-        if self.enabled:
-            try:
-                self.kb = KnowledgeBase()
-            except Exception:
-                self.kb = None
-
-    def retrieve(self, query: str, k: int | None = None) -> List[Dict[str, Any]]:
-        if not self.enabled or not self.kb:
-            return []
-        return self.kb.search(query, top_k=k or self.top_k)
-
-    def format_context(self, chunks: List[Dict[str, Any]]) -> str:
-        if not chunks:
-            return ""
-        lines = ["检索到的可能相关资料（仅供参考）："]
-        for i, ch in enumerate(chunks, 1):
-            src = ch.get("source") or "unknown"
-            content = (ch.get("content") or "").strip()
-            content = textwrap.shorten(content, width=600, placeholder=" …")
-            lines.append(f"[{i}] 来源: {src}\n{content}")
-        lines.append(
-            "请优先参考上述资料回答，引用时请用 [序号] 标注来源；在不确定时提示核验，不得编造未证实的利率或政策。"
-        )
-        return "\n\n".join(lines)
-
-    def format_sources(self, chunks: List[Dict[str, Any]]) -> str:
-        """Format retrieval results as numbered source list."""
-        if not chunks:
-            return ""
-        lines = []
-        for i, ch in enumerate(chunks, 1):
-            src = ch.get("source") or "unknown"
-            lines.append(f"[{i}] {src}")
-        return "\n".join(lines)
-
-
 def _detect_language(text: str) -> str:
     """极简语言检测：含中文字符则判为中文，否则英文。"""
     for ch in text:
@@ -118,8 +73,7 @@ class AustralianMortgageBroker:
     def __init__(self):
         self.api_client = UnifiedAIClient(model=MODEL_NAME)
         self.conversation_history = []
-        self.rag = SimpleRAG(enabled=RAG_ENABLED, top_k=RAG_TOP_K)
-        # 内置网络搜索将由模型侧（Responses API tools）处理；无需本地搜索客户端
+        # 内置网络搜索由模型侧（Responses API tools）处理；无需本地搜索客户端
 
     # 提供商固定为 OpenAI，此处无需名称映射
 
@@ -132,21 +86,8 @@ class AustralianMortgageBroker:
         # 构建系统提示（英文提示 + 简体中文输出规则）
         system_prompt = _load_prompt(reasoning=reasoning)
 
-        # 可选：RAG 检索上下文（不影响原始逻辑，默认关闭）
-        rag_context = ""
-        rag_chunks: List[Dict[str, Any]] = []
-        if self.rag.enabled:
-            try:
-                rag_chunks = self.rag.retrieve(user_input, k=self.rag.top_k)
-                rag_context = self.rag.format_context(rag_chunks)
-            except Exception:
-                rag_context = ""
-                rag_chunks = []
-
         # 构建消息列表
         messages = [{"role": "system", "content": system_prompt}]
-        if rag_context:
-            messages.append({"role": "system", "content": rag_context})
         
         # 添加历史对话（最近5轮）
         for msg in self.conversation_history[-10:]:
