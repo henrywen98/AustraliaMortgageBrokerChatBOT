@@ -84,6 +84,35 @@ class UnifiedAIClient:
                 continue
         raise Exception(last_error or "Unknown network error")
 
+    def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Strip unsupported fields (e.g., custom 'ts') and normalise structure.
+        - Keep only 'role' and 'content' keys for each message item.
+        - Coerce content to string if needed.
+        """
+        sanitized: List[Dict[str, Any]] = []
+        for m in messages:
+            if not isinstance(m, dict):
+                # Fallback: convert to user text
+                sanitized.append({"role": "user", "content": str(m)})
+                continue
+            role = m.get("role") or "user"
+            content = m.get("content")
+            if isinstance(content, (list, tuple)):
+                # Join simple text parts if provided as list
+                try:
+                    content = "".join(
+                        [
+                            (seg.get("text") if isinstance(seg, dict) else str(seg))
+                            for seg in content
+                        ]
+                    )
+                except Exception:
+                    content = " ".join([str(x) for x in content])
+            if content is None:
+                content = ""
+            sanitized.append({"role": role, "content": str(content)})
+        return sanitized
+
     def generate_response(self, messages: List[dict], max_tokens: int = 1500, use_web_search: bool = False) -> str:
         if not self.model_available:
             print(
@@ -95,7 +124,7 @@ class UnifiedAIClient:
                 # Responses API 路径，支持工具（web_search）
                 payload: Dict[str, Any] = {
                     "model": self.model,
-                    "input": messages,
+                    "input": self._sanitize_messages(messages),
                 }
                 # 最大输出（responses API 字段名不同）
                 payload["max_output_tokens"] = max_tokens
@@ -135,7 +164,7 @@ class UnifiedAIClient:
                 # 兼容 Chat Completions 路径
                 payload: Dict[str, Any] = {
                     "model": self.model,
-                    "messages": messages,
+                    "messages": self._sanitize_messages(messages),
                 }
                 if self.model.startswith("gpt-4") or self.model.startswith("gpt-5"):
                     payload["max_completion_tokens"] = max_tokens
