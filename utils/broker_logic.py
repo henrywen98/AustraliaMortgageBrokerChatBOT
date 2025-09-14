@@ -244,17 +244,25 @@ class AustralianMortgageBroker:
     def _translate_for_reasoning_if_needed(self, text: str) -> str:
         """若输入含中文字符，则调用轻量翻译生成英文查询/推理文本；否则原样返回。
         使用相同OpenAI客户端，限制较小的max_tokens以减少时延。
-        包含金融领域术语映射以提高准确性（如：现金利率→official cash rate）。
+        包含澳洲房贷经纪（mortgage broking）术语映射以提高准确性。
         """
         if _detect_language(text) == "中文":
             try:
                 messages = [
                     {"role": "system", "content": (
-                        "You are a precise translator for Australian finance. "
-                        "Translate the user's query to concise English suitable for web search and reasoning. "
-                        "Use established terms: 现金利率 -> official cash rate (RBA); 房贷 -> home loan or mortgage; "
-                        "浮动利率 -> variable rate; 固定利率 -> fixed rate; 首次购房者/首置 -> first home buyer / FHOG. "
-                        "Output English only, no notes or explanations."
+                        "You are a precise translator for Australian mortgage broking. "
+                        "Translate the user's query into concise English suitable for web search and LLM reasoning. "
+                        "Keep terminology specific to Australia. Use these mappings when applicable: "
+                        "现金利率→official cash rate (RBA); 房贷→mortgage/home loan; 浮动利率→variable rate; 固定利率→fixed rate; "
+                        "自住→owner-occupier; 投资房→investor; 首付→deposit; LVR/贷款价值比→loan-to-value ratio (LVR); "
+                        "DTI/负债收入比→debt-to-income ratio (DTI); 缓冲/压力测试→serviceability buffer; 服务能力/还款能力→serviceability; "
+                        "只付息→interest-only; 本息同还→principal and interest; 转贷/再融资→refinance; 过桥贷款→bridging loan; 建房贷款→construction loan; "
+                        "额度预批→pre-approval; 条件性预批→conditional pre-approval; 无条件批核→unconditional approval; 对比利率→comparison rate; "
+                        "返现→cashback; 抵消账户→offset account; 提前还款违约金(固定)→fixed break costs; 重新提取→redraw facility; "
+                        "印花税→stamp duty; 初次置业补助/首置补助→First Home Owner Grant (FHOG); 首置担保→First Home Guarantee (HGS); "
+                        "单亲家庭担保→Family Home Guarantee; 学生贷款→HECS-HELP; 自雇→self-employed; 工资收入→PAYG; 真实存款→genuine savings; "
+                        "估值→valuation; 交割→settlement; 律师/代书→conveyancer/solicitor; 附带融资条件→subject to finance; 冷静期→cooling-off period. "
+                        "Output English only, no explanations."
                     )},
                     {"role": "user", "content": text},
                 ]
