@@ -1,6 +1,6 @@
 # 澳大利亚房贷AI助手 | Australian Mortgage Broker AI Assistant
 
-面向澳洲房贷咨询的智能 Streamlit 助手。提供网络搜索增强与专业经纪人人设。内部统一使用英文系统提示，但最终输出为简体中文；若输入为中文，将在内部先译为英文再进行推理（不展示翻译）。
+面向澳洲房贷咨询的智能 Streamlit 助手。提供网络搜索增强与专业经纪人人设。内部统一使用英文系统提示，但最终输出为简体中文；若输入为中文，将在内部先译为英文再进行搜索与推理（不展示翻译）。
 
 [![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
