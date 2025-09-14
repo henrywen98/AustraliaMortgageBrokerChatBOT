@@ -201,6 +201,7 @@ class SearchAugmentor:
         if search_enabled:
             # 执行网络搜索
             effective_query = (search_query or user_query or "").strip()
+            effective_query = self._rewrite_search_query(effective_query)
             print(f"🔍 正在搜索: {effective_query}")
             search_results = self.web_search.search(effective_query, num_results)
             response_data["search_results"] = search_results
@@ -262,3 +263,47 @@ class SearchAugmentor:
             response_data["answer"] = f"生成回答时出错：{str(e)}"
         
         return response_data
+
+    # ----------------------------
+    # Query rewriting for better AU finance results
+    # ----------------------------
+    def _rewrite_search_query(self, q: str) -> str:
+        """Bias queries toward authoritative Australian finance sources.
+        Keeps the user's intent, adds AU context and trusted sites.
+        """
+        base = (q or "").strip()
+        low = base.lower()
+        boosters: list[str] = []
+
+        # Ensure AU context
+        if " australia" not in low and " au" not in low and "rba" not in low:
+            boosters.append("Australia")
+
+        # Cash rate → RBA and regulators
+        if any(kw in low for kw in ["cash rate", "rba", "official cash rate"]):
+            boosters.append("RBA cash rate")
+            boosters.append("site:rba.gov.au OR site:apra.gov.au OR site:abs.gov.au OR site:treasury.gov.au")
+
+        # Home loan / mortgage interest
+        if any(kw in low for kw in ["home loan", "mortgage", "interest rate", "variable rate", "fixed rate"]):
+            boosters.append(
+                "site:commbank.com.au OR site:nab.com.au OR site:anz.com OR site:westpac.com.au OR site:canstar.com.au"
+            )
+
+        # First home buyer / FHOG
+        if any(kw in low for kw in ["first home", "fhog", "first home owner grant", "stamp duty"]):
+            boosters.append(
+                "site:firsthome.gov.au OR site:nsw.gov.au OR site:vic.gov.au OR site:qld.gov.au OR site:wa.gov.au"
+            )
+
+        # De-duplicate tokens while preserving order
+        if boosters:
+            parts = [base] + boosters
+            seen = set()
+            merged: list[str] = []
+            for p in parts:
+                if p not in seen:
+                    merged.append(p)
+                    seen.add(p)
+            return " ".join(merged)
+        return base
