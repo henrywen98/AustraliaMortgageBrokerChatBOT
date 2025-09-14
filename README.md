@@ -12,6 +12,7 @@
 - **OpenAI驱动**: 基于 gpt-4o-mini 的专业房贷咨询
 - **上下文记忆**: 多轮对话连贯性
 - **专业角色**: 澳洲房贷经纪人人设
+- **英文优先推理**: 中文提问自动精准翻译为英文进行推理与搜索，答案统一中文输出（提升一致性）
 
 ### 🌐 网络搜索增强
 - **实时信息**: 搜索最新的利率、政策、市场动态
@@ -19,6 +20,7 @@
 - **DuckDuckGo驱动**: 默认使用免费的DuckDuckGo搜索（无需API密钥）
 - **智能降级**: Serper API可选，DuckDuckGo保底，Mock数据兜底
 - **一键开关**: 侧边栏中随时启用/关闭
+- **智能重写**: 针对热门主题自动加权权威站点（如现金利率→优先 `site:rba.gov.au`；首置/FHOG→`firsthome.gov.au`；利率对比→`canstar.com.au`）
 
 ### 🎨 用户体验
 - **现代化界面**: 响应式 Streamlit 设计
@@ -100,6 +102,8 @@
 - `MODEL_NAME`: 模型名称（默认: `gpt-4o-mini`）
 - `SERPER_API_KEY`: Google 搜索 API（可选，未设置时自动使用免费的DuckDuckGo）
 - `RAG_ENABLED`: 启用知识库功能（默认: `false`）
+  
+依赖说明：`requirements.txt` 已包含 `ddgs`（DuckDuckGo轻量库）。
 
 ### Streamlit Cloud Secrets 示例
 ```toml
@@ -244,7 +248,8 @@ A:
 A:
 1. **默认使用DuckDuckGo**: 无需任何配置，自动启用免费搜索
 2. **网络连接问题**: 检查网络是否正常，防火墙设置
-3. **依赖包问题**: 确保`ddgs`已正确安装（已在 requirements.txt 中）
+3. **依赖包问题**: 确保 `ddgs` 已正确安装（已在 requirements.txt 中）
+6. **结果偏题？**: 已启用查询重写对权威站点加权；若需更强约束，可在问题中补充 `site:rba.gov.au` 等站点限制。
 4. **备用方案**: 即使网络搜索失败，也会显示内置的Mock数据
 5. **升级选项**: 可配置`SERPER_API_KEY`获得更高质量的Google搜索结果
 
