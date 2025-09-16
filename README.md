@@ -1,6 +1,6 @@
 # 澳大利亚房贷AI助手 | Australian Mortgage Broker AI Assistant
 
-面向澳洲房贷咨询的智能 AI 助手。基于 OpenAI GPT-5 mini（内置 Web Search 工具），提供权威来源引用与专业经纪人人设。系统提示使用英文，最终输出统一为简体中文。
+面向澳洲房贷咨询的智能 AI 助手。默认基于 OpenAI GPT-5 mini（内置 Web Search 工具），亦支持通过 Azure OpenAI 的 gpt-5-mini 部署，提供权威来源引用与专业经纪人人设。系统提示使用英文，最终输出统一为简体中文。
 
 [![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -9,7 +9,7 @@
 ## 🎯 核心特性
 
 ### 🤖 智能对话
-- **OpenAI驱动**: 推荐使用 gpt-5-mini（内置 Web Search）
+- **OpenAI/Azure 支持**: 推荐使用 gpt-5-mini（内置 Web Search）
 - **上下文记忆**: 多轮对话连贯性
 - **专业角色**: 澳洲房贷经纪人人设
 - **统一中文输出**: 无论输入语言如何，回答统一简体中文
@@ -34,9 +34,9 @@
    # 点击页面右上角的 "Fork" 按钮
    ```
 
-2. **获取 OpenAI API 密钥**
-   - 访问 [OpenAI Platform](https://platform.openai.com/api-keys)
-   - 创建新的 API 密钥
+2. **获取 OpenAI/Azure API 凭据**
+   - 若使用 OpenAI：访问 [OpenAI Platform](https://platform.openai.com/api-keys) 并创建新的 API 密钥
+   - 若使用 Azure OpenAI：在 [Azure Portal](https://portal.azure.com/) 创建 Azure OpenAI 资源，记录 `Endpoint`、`Key` 以及部署名称
 
 3. **部署到 Streamlit Cloud**
    - 访问 [Streamlit Cloud](https://share.streamlit.io/)
@@ -49,8 +49,15 @@
 4. **配置 Secrets**
    在 Streamlit Cloud 应用设置中的 "Secrets" 部分添加：
    ```toml
+   # OpenAI（默认）
    OPENAI_API_KEY = "your_actual_openai_api_key_here"
-   
+
+   # 或者 Azure OpenAI
+   MODEL_PROVIDER = "azure"
+   AZURE_OPENAI_ENDPOINT = "https://<resource>.cognitiveservices.azure.com/openai/v1/"
+   AZURE_OPENAI_API_KEY = "your_azure_key"
+   AZURE_OPENAI_DEPLOYMENT = "gpt-5-mini"
+
    # 可选配置
    MODEL_NAME = "gpt-5-mini"  # 推荐：内置Web Search
    ```
@@ -76,7 +83,7 @@
 3. **配置环境**
    ```bash
    cp .env.example .env
-   # 编辑 .env 文件，添加您的 OPENAI_API_KEY
+   # 编辑 .env 文件，添加 OPENAI_API_KEY 或切换为 Azure 配置
    ```
 
 4. **启动应用**
@@ -92,7 +99,8 @@
 ## 📋 环境配置
 
 ### 必需配置
-- `OPENAI_API_KEY`: OpenAI API 密钥（[获取地址](https://platform.openai.com/api-keys)）
+- OpenAI 模式：`OPENAI_API_KEY`（[获取地址](https://platform.openai.com/api-keys)）
+- Azure 模式：`MODEL_PROVIDER=azure`、`AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`（部署名称默认为 `MODEL_NAME`，可通过 `AZURE_OPENAI_DEPLOYMENT` 覆盖）
 
 ### 可选配置
 - `MODEL_NAME`: 模型名称（推荐: `gpt-5-mini`；兼容 `gpt-4o-mini`）
@@ -104,6 +112,12 @@ OPENAI_API_KEY = "sk-..."
 
 # 可选
 MODEL_NAME = "gpt-5-mini"  # 推荐：内置Web Search
+
+# Azure OpenAI 示例
+MODEL_PROVIDER = "azure"
+AZURE_OPENAI_ENDPOINT = "https://<resource>.cognitiveservices.azure.com/openai/v1/"
+AZURE_OPENAI_API_KEY = "your_azure_key"
+AZURE_OPENAI_DEPLOYMENT = "gpt-5-mini"
 ```
 
 ## 💡 使用指南
@@ -154,7 +168,7 @@ MODEL_NAME = "gpt-5-mini"  # 推荐：内置Web Search
 │   └── broker_system.en.md    # 🇺🇸 英文系统提示词（统一使用；输出为简体中文）
 │
 ├── utils/
-│   ├── unified_client.py      # 🤖 OpenAI API 客户端（GPT-5 mini 使用 Responses API + Web Search 工具）
+│   ├── unified_client.py      # 🤖 OpenAI/Azure OpenAI 客户端（GPT-5 mini 使用 Responses API + Web Search 工具）
 │   └── broker_logic.py        # 🧠 对话逻辑控制器（模型内置搜索）
 │
 └── prompts/

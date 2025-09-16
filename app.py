@@ -208,8 +208,17 @@ def main():
     
     # 初始化会话状态
     initialize_session_state()
+
+    provider = getattr(getattr(st.session_state, "broker", None), "api_client", None)
+    provider_name = getattr(provider, "provider", "openai") if provider else "openai"
+    if provider_name == "azure":
+        # 强制关闭 Azure 当前不支持的功能
+        st.session_state.use_web_search = False
+        st.session_state.reasoning_mode = False
     
     # 添加自定义CSS样式
+    subtitle = "专业的房贷咨询AI助手 | 支持中英文 | 可选网页搜索" if provider_name != "azure" else "专业的房贷咨询AI助手 | 支持中英文"
+
     st.markdown("""
     <style>
     .main .block-container {
@@ -231,9 +240,20 @@ def main():
     header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
+    if provider_name == "azure":
+        st.markdown(
+            """
+            <style>
+            [data-testid="stSidebar"] {display: none;}
+            [data-testid="collapsedControl"] {display: none;}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
     
     # 优化标题显示 - 智能响应式设计
-    st.markdown("""
+    st.markdown(
+        f"""
     <div style="text-align: center; margin-bottom: 2rem;">
         <h1 class="main-title" style="
             color: #1f77b4; 
@@ -254,92 +274,96 @@ def main():
             line-height: 1.4;
             word-break: keep-all;
         ">
-            专业的房贷咨询AI助手 | 支持中英文 | 可选网页搜索
+            {subtitle}
         </p>
     </div>
     
     <style>
-    @media (max-width: 768px) {
-        .desktop-title { display: none !important; }
-        .mobile-title { display: inline !important; }
-    }
+    @media (max-width: 768px) {{
+        .desktop-title {{ display: none !important; }}
+        .mobile-title {{ display: inline !important; }}
+    }}
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     
-    # 侧边栏配置
-    with st.sidebar:
-        st.title(_t("settings"))
+    # 侧边栏配置（OpenAI 模式可用）
+    if provider_name != "azure":
+        with st.sidebar:
+            st.title(_t("settings"))
 
-        # UI language selector
-        st.selectbox(
-            _t("ui_lang"),
-            options=["zh", "en"],
-            format_func=lambda v: _t("lang_zh") if v == "zh" else _t("lang_en"),
-            key="ui_lang",
-        )
-
-        # 显示当前模型信息（只读）
-        current_model = getattr(st.session_state.broker.api_client, 'model', MODEL_NAME)
-        st.info(f"{_t('current_model')}：{current_model}")
-
-        # 对话选项（统一放置在侧边栏）
-        st.subheader(_t("conversation_options"))
-        st.session_state.use_web_search = st.toggle(
-            _t("toggle_search"),
-            value=st.session_state.use_web_search,
-            help=_t("toggle_search_help"),
-        )
-        st.session_state.reasoning_mode = st.toggle(
-            _t("toggle_reasoning"),
-            value=st.session_state.reasoning_mode,
-            help=_t("toggle_reasoning_help"),
-        )
-
-        # Status indicators
-        if st.session_state.use_web_search:
-            st.success(_t("mode_search_on"))
-        else:
-            st.info(_t("mode_search_off"))
-        st.caption(_t("reasoning_on") if st.session_state.reasoning_mode else _t("reasoning_off"))
-
-        # （RAG UI 已移除；功能接口保留以便未来启用）
-
-        # 健康检查按钮
-        if st.button(_t("test_conn")):
-            ok = st.session_state.broker.test_provider_connection()
-            if ok:
-                st.success("模型调用成功✔️" if st.session_state.ui_lang=="zh" else "API connection OK ✔️")
-            else:
-                st.error("连接或调用失败，请检查网络 / API Key" if st.session_state.ui_lang=="zh" else "Connection or call failed. Check network/API key.")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(_t("clear_history")):
-                st.session_state.messages = []
-                st.rerun()
-        with col2:
-            if st.button(_t("undo")):
-                if len(st.session_state.messages) >= 2:
-                    st.session_state.messages = st.session_state.messages[:-2]
-                    st.rerun()
-
-        # 导出对话
-        if st.session_state.messages:
-            st.subheader(_t("export"))
-            export_json = json.dumps(st.session_state.messages, ensure_ascii=False, indent=2)
-            st.download_button(
-                label=_t("download_json"),
-                data=export_json.encode("utf-8"),
-                file_name=f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json"
+            # UI language selector
+            st.selectbox(
+                _t("ui_lang"),
+                options=["zh", "en"],
+                format_func=lambda v: _t("lang_zh") if v == "zh" else _t("lang_en"),
+                key="ui_lang",
             )
 
-        st.markdown("---")
-        st.markdown(f"**{_t('about_title')}**")
-        st.markdown(_t("about_lines"))
+            # 显示当前模型信息（只读）
+            current_model = getattr(st.session_state.broker.api_client, 'model', MODEL_NAME)
+            st.info(f"{_t('current_model')}：{current_model}")
 
-        with st.expander(_t("help")):
-            st.markdown(_t("help_text"))
+            # 对话选项（统一放置在侧边栏）
+            st.subheader(_t("conversation_options"))
+            st.session_state.use_web_search = st.toggle(
+                _t("toggle_search"),
+                value=st.session_state.use_web_search,
+                help=_t("toggle_search_help"),
+            )
+            st.session_state.reasoning_mode = st.toggle(
+                _t("toggle_reasoning"),
+                value=st.session_state.reasoning_mode,
+                help=_t("toggle_reasoning_help"),
+            )
+
+            # Status indicators
+            if st.session_state.use_web_search:
+                st.success(_t("mode_search_on"))
+            else:
+                st.info(_t("mode_search_off"))
+            st.caption(_t("reasoning_on") if st.session_state.reasoning_mode else _t("reasoning_off"))
+
+            # 健康检查按钮
+            if st.button(_t("test_conn")):
+                ok = st.session_state.broker.test_provider_connection()
+                if ok:
+                    st.success("模型调用成功✔️" if st.session_state.ui_lang=="zh" else "API connection OK ✔️")
+                else:
+                    st.error("连接或调用失败，请检查网络 / API Key" if st.session_state.ui_lang=="zh" else "Connection or call failed. Check network/API key.")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button(_t("clear_history")):
+                    st.session_state.messages = []
+                    st.rerun()
+            with col2:
+                if st.button(_t("undo")):
+                    if len(st.session_state.messages) >= 2:
+                        st.session_state.messages = st.session_state.messages[:-2]
+                        st.rerun()
+
+            # 导出对话
+            if st.session_state.messages:
+                st.subheader(_t("export"))
+                export_json = json.dumps(st.session_state.messages, ensure_ascii=False, indent=2)
+                st.download_button(
+                    label=_t("download_json"),
+                    data=export_json.encode("utf-8"),
+                    file_name=f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json"
+                )
+
+            st.markdown("---")
+            st.markdown(f"**{_t('about_title')}**")
+            st.markdown(_t("about_lines"))
+
+            with st.expander(_t("help")):
+                st.markdown(_t("help_text"))
+    else:
+        st.session_state.ui_lang = st.session_state.get("ui_lang", "zh")
+        st.info("当前使用 Azure OpenAI 部署，已为你启用精简界面。" if st.session_state.ui_lang == "zh" else "Running with Azure OpenAI deployment; sidebar controls are hidden.")
     
     # 轻量样式优化：更紧凑的聊天区域
     st.markdown(

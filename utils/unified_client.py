@@ -3,10 +3,15 @@ import json
 import time
 import requests
 from typing import List, Dict, Any, Optional
+from openai import OpenAI
 from config import (
     OPENAI_API_KEY_VAR,
     OPENAI_CHAT_URL,
     MODEL_NAME,
+    MODEL_PROVIDER,
+    AZURE_OPENAI_API_KEY_VAR,
+    AZURE_OPENAI_ENDPOINT_VAR,
+    AZURE_OPENAI_DEPLOYMENT_VAR,
 )
 from dotenv import load_dotenv
 
@@ -14,29 +19,62 @@ load_dotenv()
 
 
 class UnifiedAIClient:
-    """统一的AI客户端（仅 OpenAI）。"""
+    """统一的AI客户端（支持 OpenAI 与 Azure OpenAI）。"""
 
-    def __init__(self, model: str = MODEL_NAME, provider: str = "openai", timeout: int = 60, max_retries: int = 3):
+    def __init__(
+        self,
+        model: str = MODEL_NAME,
+        provider: str = MODEL_PROVIDER,
+        timeout: int = 60,
+        max_retries: int = 3,
+    ):
         self.model = model or "gpt-4o-mini"
-        self.provider = "openai"  # 固定为 OpenAI
+        self.provider = (provider or "openai").strip().lower()
         self.timeout = timeout
         self.max_retries = max_retries
-        self.session = requests.Session()
 
-        self.api_key = os.getenv(OPENAI_API_KEY_VAR)
         self.api_url = OPENAI_CHAT_URL
         self.responses_api_url = "https://api.openai.com/v1/responses"
-        if not self.api_key:
-            print("⚠️ OPENAI_API_KEY 未设置")
 
-        # 预探测模型是否存在（忽略失败）
-        self.model_available = self._probe_model(self.model)
-        # 模型能力探测（启用 Responses API & 工具）
-        self.use_responses = str(self.model).lower().startswith("gpt-5")
+        if self.provider == "azure":
+            self.session = None
+            self.api_key = os.getenv(AZURE_OPENAI_API_KEY_VAR)
+            self.azure_endpoint = os.getenv(AZURE_OPENAI_ENDPOINT_VAR, "").strip()
+            self.azure_deployment = os.getenv(AZURE_OPENAI_DEPLOYMENT_VAR) or self.model
+            if not self.api_key:
+                print("⚠️ AZURE_OPENAI_API_KEY 未设置")
+            if not self.azure_endpoint:
+                raise ValueError("Missing AZURE_OPENAI_ENDPOINT")
+
+            self.azure_client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.azure_endpoint,
+            )
+            # Azure 部署不提供 /v1/models 探测接口，直接假定可用
+            self.model_available = True
+            # Azure Responses API 尚未全面开放，关闭 Responses 模式
+            self.use_responses = False
+        else:
+            self.session = requests.Session()
+            self.api_key = os.getenv(OPENAI_API_KEY_VAR)
+            if not self.api_key:
+                print("⚠️ OPENAI_API_KEY 未设置")
+
+            # 预探测模型是否存在（忽略失败）
+            self.model_available = self._probe_model(self.model)
+            # 模型能力探测（启用 Responses API & 工具）
+            self.use_responses = str(self.model).lower().startswith("gpt-5")
 
     def _headers(self) -> Dict[str, str]:
         if not self.api_key:
+            if self.provider == "azure":
+                raise ValueError("Missing AZURE_OPENAI_API_KEY")
             raise ValueError("Missing OPENAI_API_KEY")
+        if self.provider == "azure":
+            return {
+                "api-key": self.api_key,
+                "Content-Type": "application/json",
+            }
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -113,7 +151,32 @@ class UnifiedAIClient:
             sanitized.append({"role": role, "content": str(content)})
         return sanitized
 
+    def _generate_via_azure(self, messages: List[Dict[str, Any]], max_tokens: int, use_web_search: bool) -> str:
+        if use_web_search:
+            print("ℹ️ Azure OpenAI 当前不支持模型内置 Web Search 工具，已忽略 use_web_search 参数。")
+
+        sanitized_messages = self._sanitize_messages(messages)
+        try:
+            completion = self.azure_client.chat.completions.create(  # type: ignore[attr-defined]
+                model=self.azure_deployment,
+                messages=sanitized_messages,
+                max_completion_tokens=max_tokens,
+            )
+        except Exception as exc:
+            raise Exception(f"Azure OpenAI call failed: {exc}")
+
+        message = completion.choices[0].message
+        text = getattr(message, "content", None)
+        if isinstance(message, dict):
+            text = message.get("content")
+        if not text:
+            raise Exception(f"Empty response: {completion}")
+        return str(text).strip()
+
     def generate_response(self, messages: List[dict], max_tokens: int = 1500, use_web_search: bool = False) -> str:
+        if self.provider == "azure":
+            return self._generate_via_azure(messages, max_tokens, use_web_search)
+
         if not self.model_available:
             print(
                 f"⚠️ 模型 {self.model} 未在 /v1/models 列表中发现，仍尝试直接调用；请确认名称是否正确。"
@@ -182,9 +245,27 @@ class UnifiedAIClient:
 
     def test_connection(self) -> bool:
         try:
-            _ = self.generate_response([{"role": "user", "content": "ping"}], max_tokens=5)
+            if self.provider == "azure":
+                completion = self.azure_client.chat.completions.create(  # type: ignore[attr-defined]
+                    model=self.azure_deployment,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "ping"},
+                    ],
+                    max_completion_tokens=10,
+                )
+                return bool(getattr(completion.choices[0], "message", None))
+            _ = self.generate_response(
+                [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "ping"},
+                ],
+                max_tokens=10,
+                use_web_search=False,
+            )
             return True
-        except Exception:
+        except Exception as exc:
+            print(f"测试连接失败: {exc}")
             return False
 
 

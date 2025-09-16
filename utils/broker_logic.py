@@ -2,7 +2,7 @@ from utils.unified_client import UnifiedAIClient
 from pathlib import Path
 from typing import List, Dict, Any
 import datetime as _dt
-from config import MODEL_NAME
+from config import MODEL_NAME, MODEL_PROVIDER
 
 
 def _load_prompt(reasoning: bool = False) -> str:
@@ -68,10 +68,10 @@ def _detect_language(text: str) -> str:
 
 
 class AustralianMortgageBroker:
-    """澳大利亚抵押贷款经纪人AI助手（OpenAI + 可选网络搜索）"""
+    """澳大利亚抵押贷款经纪人AI助手（OpenAI/Azure + 可选网络搜索）"""
 
     def __init__(self):
-        self.api_client = UnifiedAIClient(model=MODEL_NAME)
+        self.api_client = UnifiedAIClient(model=MODEL_NAME, provider=MODEL_PROVIDER)
         self.conversation_history = []
         # 内置网络搜索由模型侧（Responses API tools）处理；无需本地搜索客户端
 

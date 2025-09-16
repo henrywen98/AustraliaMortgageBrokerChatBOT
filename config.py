@@ -16,6 +16,11 @@ load_dotenv()
 OPENAI_API_KEY_VAR = "OPENAI_API_KEY"
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
+# Azure OpenAI 配置
+AZURE_OPENAI_API_KEY_VAR = "AZURE_OPENAI_API_KEY"
+AZURE_OPENAI_ENDPOINT_VAR = "AZURE_OPENAI_ENDPOINT"
+AZURE_OPENAI_DEPLOYMENT_VAR = "AZURE_OPENAI_DEPLOYMENT"
+
 # 默认模型配置
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5-mini")
 MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "openai")
@@ -40,8 +45,15 @@ def is_streamlit_cloud():
 
 def get_required_env_vars():
     """获取必需的环境变量列表"""
+    provider = (MODEL_PROVIDER or "openai").strip().lower()
+    if provider == "azure":
+        required = [
+            AZURE_OPENAI_API_KEY_VAR,
+            AZURE_OPENAI_ENDPOINT_VAR,
+        ]
+        return required
     return [
-        "OPENAI_API_KEY"
+        OPENAI_API_KEY_VAR
     ]
 
 def validate_environment():
