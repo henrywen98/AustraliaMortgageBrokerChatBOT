@@ -197,7 +197,9 @@ def render_rich_text(text: str):
             except Exception:
                 st.markdown(f"``{chunk}``")
         else:
-            st.markdown(chunk)
+            # Replace '$' with 'AUD' to avoid inline-math rendering issues
+            safe_chunk = chunk.replace("$", "AUD")
+            st.markdown(safe_chunk)
 
 
 def main():
